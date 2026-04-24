@@ -238,6 +238,318 @@ footer .dot {
   opacity: 0.5;
 }
 
+/* ── Signed-in shell (sidebar + routed view) ───────────────────── */
+
+.shell {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px 24px 48px;
+  gap: 24px;
+  min-height: calc(100vh - 120px);
+}
+
+.sidebar nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px;
+  position: sticky;
+  top: 24px;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  color: var(--muted);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  border: 1px solid transparent;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.nav-link:hover {
+  color: var(--accent);
+  text-decoration: none;
+  background: rgba(245, 193, 22, 0.06);
+}
+
+.nav-link.active {
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-color: rgba(245, 193, 22, 0.35);
+}
+
+.nav-link .nav-icon {
+  color: var(--accent);
+  font-size: 9px;
+  width: 12px;
+  text-align: center;
+}
+
+.nav-link-sub {
+  padding-left: 22px;
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.view {
+  min-width: 0;
+}
+
+.page-header {
+  margin-bottom: 24px;
+}
+
+.page-header h1 {
+  margin: 0 0 6px;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+}
+
+.page-header .lede {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* ── Overview ───────────────────────────────────────────────────── */
+
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.stat {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 18px;
+}
+
+.stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--muted);
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 4px 0 2px;
+}
+
+.stat-sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.note {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ── Plan grid ──────────────────────────────────────────────────── */
+
+.plan-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.plan-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.plan-card-pro {
+  border-color: rgba(245, 193, 22, 0.45);
+}
+
+.plan-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--text);
+}
+
+.plan-price {
+  margin-top: 4px;
+  font-size: 28px;
+  font-weight: 800;
+}
+
+.plan-price span {
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 500;
+  margin-left: 2px;
+}
+
+.plan-sub {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.plan-features {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.plan-features li::before {
+  content: "⬢ ";
+  color: var(--accent);
+  margin-right: 4px;
+}
+
+.plan-card button {
+  margin-top: auto;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  background: var(--accent);
+  color: #1a1a1a;
+  border: 1px solid var(--accent);
+  font-weight: 600;
+}
+
+.plan-card button[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ── Generic "coming soon" card ─────────────────────────────────── */
+
+.soon-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+}
+
+.soon-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.soon-card-head h2 {
+  margin: 0;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  flex: 1;
+}
+
+.soon-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+/* ── Redeem card ────────────────────────────────────────────────── */
+
+.redeem-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.redeem-card input {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.redeem-card input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-dim);
+}
+
+.redeem-card button {
+  align-self: flex-start;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 10px 18px;
+  border-radius: 6px;
+  cursor: pointer;
+  background: var(--accent);
+  color: #1a1a1a;
+  border: 1px solid var(--accent);
+  font-weight: 600;
+}
+
+.redeem-card button[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.redeem-card label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--muted);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.error {
+  color: var(--danger);
+}
+
 /* ── Signed-in chip ─────────────────────────────────────────────── */
 
 .signed-in {
@@ -347,6 +659,25 @@ dialog.signin-dialog .signin-actions {
   justify-content: flex-end;
   gap: 8px;
   margin-top: 18px;
+}
+
+@media (max-width: 740px) {
+  .shell {
+    grid-template-columns: 1fr;
+    padding: 20px 16px 40px;
+  }
+  .sidebar nav {
+    position: static;
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 6px;
+  }
+  .nav-link {
+    white-space: nowrap;
+  }
+  .nav-link-sub {
+    padding-left: 10px;
+  }
 }
 
 @media (max-width: 640px) {

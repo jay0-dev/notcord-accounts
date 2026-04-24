@@ -10,7 +10,7 @@
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="/">
+    <a class="brand" href="/" data-route>
       <span class="logo">⬢</span>
       <span class="brand-name">HEXIS</span>
       <span class="brand-sub">accounts</span>
@@ -63,12 +63,16 @@
     </form>
   </dialog>
 
-  <main class="container">
+  <!-- Signed-out landing: hero + cards describing what lives here. -->
+  <main class="container" id="landing" hidden>
     <section class="hero">
       <h1>Account &amp; billing</h1>
       <p class="lede">
         Manage your subscription, view invoices, and provision API keys and
         bots from one place.
+      </p>
+      <p>
+        <button class="primary" type="button" data-landing-signin>Sign in to continue</button>
       </p>
     </section>
 
@@ -125,14 +129,40 @@
         </p>
       </article>
     </section>
-
-    <section class="status">
-      <p>
-        This page is a scaffold. Subscription, billing, API-key, and
-        bot management ship in upcoming releases.
-      </p>
-    </section>
   </main>
+
+  <!-- Signed-in dashboard shell: sidebar nav + routed view. -->
+  <div class="shell" id="shell" hidden>
+    <aside class="sidebar">
+      <nav>
+        <a href="/" class="nav-link" data-route data-match="/">
+          <span class="nav-icon">⬢</span>Overview
+        </a>
+        <a href="/subscription" class="nav-link" data-route>
+          <span class="nav-icon">●</span>Subscription
+        </a>
+        <a href="/billing" class="nav-link" data-route>
+          <span class="nav-icon">●</span>Billing
+        </a>
+        <a href="/api-keys" class="nav-link" data-route>
+          <span class="nav-icon">●</span>API keys
+        </a>
+        <a href="/bots" class="nav-link" data-route>
+          <span class="nav-icon">●</span>Bots
+        </a>
+        <a href="/gift" class="nav-link" data-route>
+          <span class="nav-icon">●</span>Gift codes
+        </a>
+        <a href="/gift/orders" class="nav-link nav-link-sub" data-route>
+          <span class="nav-icon">·</span>Past orders
+        </a>
+      </nav>
+    </aside>
+
+    <main class="view" id="view">
+      <!-- populated by app.js -->
+    </main>
+  </div>
 
   <footer>
     <span>© 2026 Hexis</span>

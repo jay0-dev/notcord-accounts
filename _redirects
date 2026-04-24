@@ -1,0 +1,7 @@
+# Cloudflare Pages SPA fallback — serve index.html for any unknown
+# path so pushState deep links (accounts.hexis.chat/subscription,
+# /api-keys, /gift/orders, /redeem, …) hydrate into app.js's router
+# instead of 404-ing. Files that physically exist under the site
+# root (styles.css, app.js, _headers, 404.html) take precedence —
+# this rule only fires after CF Pages exhausts the file match.
+/*  /index.html  200
