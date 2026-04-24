@@ -145,6 +145,7 @@
     { path: "/gift",             render: renderGift,           auth: true  },
     { path: "/gift/orders",      render: renderGiftOrders,     auth: true  },
     { path: "/redeem",           render: renderRedeem,         auth: false },
+    { path: "/oauth/authorize",  render: renderOauthAuthorize, auth: false },
   ];
 
   function matchRoute(path) {
@@ -1098,6 +1099,179 @@
         <a href="/" data-route>Back to the dashboard</a>
       </p>
     `);
+  }
+
+  // ── /oauth/authorize ─────────────────────────────────────────────
+  // Consent screen for third-party OAuth 2.1 + PKCE bots. The bot
+  // sends the user here with all the authorize-request params; we
+  // preflight, render "App X wants permission to: …", then on
+  // Allow / Deny POST to the backend which returns the redirect
+  // URL (we never auto-redirect to an unverified URI).
+
+  async function renderOauthAuthorize() {
+    setView(html`
+      <section class="page-header">
+        <h1>Authorize app</h1>
+        <p class="lede">An external application is requesting access to your Hexis account.</p>
+      </section>
+      <div id="oauth-body">
+        <p class="muted">Validating request…</p>
+      </div>
+    `);
+
+    const qp = new URLSearchParams(location.search);
+    const params = {};
+    for (const k of [
+      "client_id",
+      "redirect_uri",
+      "response_type",
+      "code_challenge",
+      "code_challenge_method",
+      "scope",
+      "state",
+    ]) {
+      const v = qp.get(k);
+      if (v !== null) params[k] = v;
+    }
+
+    const preflightQS = new URLSearchParams(params).toString();
+    const { status, body } = await apiFetch(
+      "/oauth/authorize/preflight?" + preflightQS
+    );
+
+    const bodyEl = $("oauth-body");
+    if (!bodyEl) return;
+
+    if (status !== 200 || !body || !body.ok) {
+      const reason = (body && body.error) || "invalid_request";
+      bodyEl.innerHTML = html`
+        <div class="oauth-error">
+          <h2>This authorization request can't be completed.</h2>
+          <p>The bot that sent you here is misconfigured or has not been approved.</p>
+          <p class="muted">Error code: <code>${reason}</code></p>
+        </div>
+      `;
+      return;
+    }
+
+    const app = body.app;
+    const scopes = body.requested_scopes || [];
+
+    if (!state.user) {
+      bodyEl.innerHTML = html`
+        <div class="oauth-card">
+          <div class="oauth-app-head">
+            <div class="oauth-app-name">${app.name}</div>
+            <div class="muted">${app.description || ""}</div>
+          </div>
+          <p>
+            Sign in to your Hexis account to review what
+            <strong>${app.name}</strong> is asking for.
+          </p>
+          <button class="primary" type="button" id="oauth-signin">Sign in to continue</button>
+        </div>
+      `;
+      const btn = $("oauth-signin");
+      if (btn) btn.addEventListener("click", () => openDialog());
+      return;
+    }
+
+    const scopeList = scopes
+      .map((s) => `<li><code>${s}</code> — ${scopeDescription(s)}</li>`)
+      .join("");
+
+    const clientType = app.is_public_client
+      ? "public client (no secret; PKCE-only)"
+      : "confidential client";
+
+    bodyEl.innerHTML = html`
+      <div class="oauth-card">
+        <div class="oauth-app-head">
+          <div class="oauth-app-name">${app.name}</div>
+          ${app.description
+            ? html`<div class="muted">${app.description}</div>`
+            : ""}
+          ${app.homepage_url
+            ? html`<div><a href="${app.homepage_url}" rel="noopener noreferrer" target="_blank">${app.homepage_url}</a></div>`
+            : ""}
+          <div class="muted oauth-app-type">${clientType}</div>
+        </div>
+
+        <h2 class="oauth-section">Wants permission to:</h2>
+        <ul class="oauth-scopes">${raw(scopeList)}</ul>
+
+        <p class="muted oauth-fine">
+          Authorizing grants <strong>${app.name}</strong> access to act
+          on your account using only the scopes above. You can revoke
+          this access at any time from <a href="/bots" data-route>Bots</a>.
+        </p>
+
+        <div class="oauth-actions">
+          <button class="ghost" type="button" id="oauth-deny">Cancel</button>
+          <button class="primary" type="button" id="oauth-allow">Authorize</button>
+        </div>
+
+        <p class="muted oauth-fine" id="oauth-status" hidden></p>
+      </div>
+    `;
+
+    $("oauth-allow").addEventListener("click", () => doOauthDecision("allow", params));
+    $("oauth-deny").addEventListener("click", () => doOauthDecision("deny", params));
+  }
+
+  async function doOauthDecision(decision, params) {
+    if (!state.csrfToken) {
+      const status = $("oauth-status");
+      if (status) {
+        status.textContent = "Please sign in again to continue.";
+        status.hidden = false;
+      }
+      return;
+    }
+
+    const status = $("oauth-status");
+    if (status) {
+      status.textContent =
+        decision === "allow" ? "Issuing authorization…" : "Cancelling…";
+      status.hidden = false;
+    }
+
+    const path =
+      decision === "allow"
+        ? "/oauth/authorize/confirm"
+        : "/oauth/authorize/deny";
+
+    const { status: code, body } = await apiFetch(path, {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+
+    if (code === 200 && body && body.ok && body.redirect_url) {
+      // Navigate to the bot's redirect_uri (external).
+      window.location.href = body.redirect_url;
+      return;
+    }
+
+    if (status) {
+      status.textContent =
+        (body && body.error) || "Couldn't complete the request.";
+      status.hidden = false;
+    }
+  }
+
+  function scopeDescription(scope) {
+    const map = {
+      "read:messages": "read messages in your servers + DMs",
+      "write:messages": "send messages on your behalf",
+      "read:servers": "see the servers you're in",
+      "manage:roles": "create + assign roles in your servers",
+      "manage:channels": "create + edit channels in your servers",
+      "read:voice": "join voice channels you can access",
+      "write:voice": "transmit in voice channels",
+      "read:dms": "read DMs the bot is messaged in",
+      "write:dms": "send DMs to users who message it",
+    };
+    return map[scope] || scope;
   }
 
   async function onSignedIn() {
