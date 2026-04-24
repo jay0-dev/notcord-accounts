@@ -238,6 +238,117 @@ footer .dot {
   opacity: 0.5;
 }
 
+/* ── Signed-in chip ─────────────────────────────────────────────── */
+
+.signed-in {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.signed-in .muted-label {
+  color: var(--muted);
+}
+
+.signed-in strong {
+  font-weight: 600;
+}
+
+/* ── Sign-in dialog ─────────────────────────────────────────────── */
+
+dialog.signin-dialog {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0;
+  width: min(420px, calc(100vw - 32px));
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+
+dialog.signin-dialog::backdrop {
+  background: rgba(8, 10, 14, 0.7);
+}
+
+dialog.signin-dialog form {
+  display: block;
+  padding: 20px 22px 22px;
+}
+
+dialog.signin-dialog form > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 16px;
+}
+
+dialog.signin-dialog h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+}
+
+dialog.signin-dialog .dialog-close {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+dialog.signin-dialog .dialog-close:hover {
+  color: var(--accent);
+}
+
+dialog.signin-dialog label {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--muted);
+  margin: 12px 0 6px;
+}
+
+dialog.signin-dialog input {
+  width: 100%;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+dialog.signin-dialog input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-dim);
+}
+
+dialog.signin-dialog .signin-error {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  background: rgba(255, 90, 95, 0.1);
+  border: 1px solid rgba(255, 90, 95, 0.35);
+  color: var(--danger);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+dialog.signin-dialog .signin-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
 @media (max-width: 640px) {
   .topbar {
     padding: 12px 16px;
@@ -247,5 +358,8 @@ footer .dot {
   }
   .hero h1 {
     font-size: 26px;
+  }
+  .signed-in .muted-label {
+    display: none;
   }
 }

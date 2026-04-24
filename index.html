@@ -17,9 +17,51 @@
     </a>
     <nav class="topbar-actions">
       <a href="https://hexis.chat" class="ghost">hexis.chat</a>
-      <button class="primary" id="signin-btn" disabled>Sign in</button>
+      <span class="signed-in" id="signed-in" hidden>
+        <span class="muted-label">Signed in as</span>
+        <strong id="signed-in-name"></strong>
+        <button class="ghost" id="signout-btn" type="button">Sign out</button>
+      </span>
+      <button class="primary" id="signin-btn" type="button">Sign in</button>
     </nav>
   </header>
+
+  <dialog id="signin-dialog" class="signin-dialog">
+    <form id="signin-form" method="dialog">
+      <header>
+        <h3>Sign in to Hexis</h3>
+        <button type="button" class="dialog-close" id="signin-close" aria-label="Close">×</button>
+      </header>
+
+      <label for="signin-username">Username</label>
+      <input
+        type="text"
+        id="signin-username"
+        name="username"
+        autocomplete="username"
+        autocapitalize="none"
+        autocorrect="off"
+        spellcheck="false"
+        required
+      />
+
+      <label for="signin-password">Password</label>
+      <input
+        type="password"
+        id="signin-password"
+        name="password"
+        autocomplete="current-password"
+        required
+      />
+
+      <p class="signin-error" id="signin-error" hidden></p>
+
+      <div class="signin-actions">
+        <button type="button" class="ghost" id="signin-cancel">Cancel</button>
+        <button type="submit" class="primary" id="signin-submit">Sign in</button>
+      </div>
+    </form>
+  </dialog>
 
   <main class="container">
     <section class="hero">
@@ -97,5 +139,7 @@
     <span class="dot">·</span>
     <a href="https://hexis.chat">hexis.chat</a>
   </footer>
+
+  <script src="/app.js" defer></script>
 </body>
 </html>
