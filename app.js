@@ -136,14 +136,15 @@
 
   // ── Router ───────────────────────────────────────────────────────
   const routes = [
-    { path: "/",              render: renderOverview,       auth: true  },
-    { path: "/subscription",  render: renderSubscription,   auth: true  },
-    { path: "/billing",       render: renderBilling,        auth: true  },
-    { path: "/api-keys",      render: renderApiKeys,        auth: true  },
-    { path: "/bots",          render: renderBots,           auth: true  },
-    { path: "/gift",          render: renderGift,           auth: true  },
-    { path: "/gift/orders",   render: renderGiftOrders,     auth: true  },
-    { path: "/redeem",        render: renderRedeem,         auth: false },
+    { path: "/",                 render: renderOverview,       auth: true  },
+    { path: "/subscription",     render: renderSubscription,   auth: true  },
+    { path: "/billing",          render: renderBilling,        auth: true  },
+    { path: "/billing/return",   render: renderBillingReturn,  auth: true  },
+    { path: "/api-keys",         render: renderApiKeys,        auth: true  },
+    { path: "/bots",             render: renderBots,           auth: true  },
+    { path: "/gift",             render: renderGift,           auth: true  },
+    { path: "/gift/orders",      render: renderGiftOrders,     auth: true  },
+    { path: "/redeem",           render: renderRedeem,         auth: false },
   ];
 
   function matchRoute(path) {
@@ -244,6 +245,39 @@
     `;
   }
 
+  async function refreshSummary() {
+    const { status, body } = await apiFetch("/api/v1/account/summary");
+    if (status === 200 && body && body.ok) {
+      state.summary = body;
+      return body;
+    }
+    state.summary = null;
+    return null;
+  }
+
+  function planLabel(plan) {
+    if (!plan) return "Not active";
+    return plan.charAt(0).toUpperCase() + plan.slice(1);
+  }
+
+  function statusLabel(status) {
+    if (!status || status === "unsubscribed") return "No subscription";
+    return status.replace(/_/g, " ");
+  }
+
+  function fmtDate(iso) {
+    if (!iso) return "—";
+    try {
+      return new Date(iso).toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
+    } catch {
+      return iso;
+    }
+  }
+
   async function renderOverview() {
     setView(html`
       ${raw(pageHeader("Overview", `Welcome, ${state.user.display_name || state.user.username}.`))}
@@ -252,29 +286,32 @@
       </div>
     `);
 
-    const { status, body } = await apiFetch("/api/v1/account/summary");
-    if (status !== 200 || !body || !body.ok) {
-      const body$ = $("overview-body");
-      if (body$) {
-        body$.innerHTML = html`<p class="error">Couldn't load summary.</p>`;
-      }
+    const body = await refreshSummary();
+    if (!body) {
+      const b = $("overview-body");
+      if (b) b.innerHTML = html`<p class="error">Couldn't load summary.</p>`;
       return;
     }
 
-    state.summary = body;
-    const planLabel = body.plan
-      ? body.plan.charAt(0).toUpperCase() + body.plan.slice(1)
-      : "Not active";
-    const statusLabel = body.status || "—";
+    const renewLine = body.cancel_at_period_end
+      ? `Ends ${fmtDate(body.current_period_end)}`
+      : body.current_period_end
+      ? `Renews ${fmtDate(body.current_period_end)}`
+      : "Memberships on this account";
 
-    const body$ = $("overview-body");
-    if (!body$) return;
-    body$.innerHTML = html`
+    const b = $("overview-body");
+    if (!b) return;
+    b.innerHTML = html`
       <div class="overview-grid">
         <div class="stat">
           <div class="stat-label">Plan</div>
-          <div class="stat-value">${planLabel}</div>
-          <div class="stat-sub">Status: ${statusLabel}</div>
+          <div class="stat-value">${planLabel(body.plan)}</div>
+          <div class="stat-sub">Status: ${statusLabel(body.status)}</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Billing</div>
+          <div class="stat-value">${body.plan ? "Active" : "—"}</div>
+          <div class="stat-sub">${renewLine}</div>
         </div>
         <div class="stat">
           <div class="stat-label">Servers</div>
@@ -283,19 +320,34 @@
         </div>
       </div>
 
-      <div class="note">
-        Subscription, billing, and API-key tooling is rolling out
-        over upcoming releases. You can see what's planned from
-        the sidebar.
-      </div>
+      ${
+        body.plan
+          ? ""
+          : raw(html`
+              <div class="note">
+                You don't have an active plan yet.
+                <a href="/subscription" data-route>Pick one</a> to start using Hexis.
+              </div>
+            `)
+      }
     `;
   }
 
-  function renderSubscription() {
+  async function renderSubscription() {
+    const body = state.summary || (await refreshSummary());
+    const current = body && body.plan;
+
     setView(html`
-      ${raw(pageHeader("Subscription", "Pick the plan that fits — upgrade or downgrade any time."))}
+      ${raw(
+        pageHeader(
+          "Subscription",
+          current
+            ? `You're on Hexis ${planLabel(current)}. Change plans any time.`
+            : "Pick the plan that fits — upgrade or downgrade any time."
+        )
+      )}
       <div class="plan-grid">
-        <div class="plan-card">
+        <div class="plan-card ${current === "core" ? "plan-card-active" : ""}">
           <div class="plan-head">
             <h2>Hexis Core</h2>
             <div class="plan-price">$12<span>/yr</span></div>
@@ -306,10 +358,14 @@
             <li>720p screen-share</li>
             <li>3 personal API keys</li>
           </ul>
-          <button class="primary" type="button" disabled>Coming soon</button>
+          <button class="primary" type="button" data-checkout="core" ${
+            current === "core" ? "disabled" : ""
+          }>
+            ${current === "core" ? "Current plan" : current ? "Switch to Core" : "Choose Core"}
+          </button>
         </div>
 
-        <div class="plan-card plan-card-pro">
+        <div class="plan-card plan-card-pro ${current === "pro" ? "plan-card-active" : ""}">
           <div class="plan-head">
             <h2>Hexis Pro</h2>
             <div class="plan-price">$50<span>/yr</span></div>
@@ -321,29 +377,124 @@
             <li>25 personal API keys</li>
             <li>Hexis Pro badge</li>
           </ul>
-          <button class="primary" type="button" disabled>Coming soon</button>
+          <button class="primary" type="button" data-checkout="pro" ${
+            current === "pro" ? "disabled" : ""
+          }>
+            ${current === "pro" ? "Current plan" : current ? "Switch to Pro" : "Choose Pro"}
+          </button>
         </div>
       </div>
 
-      ${raw(
-        placeholderCard(
-          "Billing via Stripe",
-          "Checkout, invoices, and plan changes will route through Stripe Customer Portal. Nothing to do here yet."
-        )
-      )}
+      <p class="muted">
+        Checkout opens Stripe. We never see your card — Hexis only
+        stores the subscription status mirrored back via webhook.
+      </p>
     `);
   }
 
-  function renderBilling() {
+  async function renderBilling() {
+    const body = state.summary || (await refreshSummary());
+    const hasCustomer = body && body.plan;
+
     setView(html`
       ${raw(pageHeader("Billing", "Payment method, invoices, and receipts."))}
-      ${raw(
-        placeholderCard(
-          "Nothing on file yet",
-          "Once subscriptions are live, payment-method updates, invoices, and refund history will surface here. Payments are handled through Stripe."
-        )
-      )}
+      ${
+        hasCustomer
+          ? raw(html`
+              <div class="soon-card">
+                <div class="soon-card-head">
+                  <h2>Manage in Stripe</h2>
+                </div>
+                <p>
+                  Payment method, past invoices, and cancel /
+                  downgrade / upgrade all live in the Stripe
+                  Customer Portal. You'll be bounced back here
+                  when you're done.
+                </p>
+                <p style="margin-top: 12px;">
+                  <button class="primary" type="button" id="btn-portal">
+                    Open Customer Portal
+                  </button>
+                </p>
+              </div>
+            `)
+          : raw(
+              placeholderCard(
+                "No billing yet",
+                "You don't have an active plan, so there's nothing to manage. Pick a plan from the Subscription page to get started."
+              )
+            )
+      }
     `);
+  }
+
+  async function renderBillingReturn() {
+    setView(html`
+      ${raw(pageHeader("Finishing up", "Waiting for Stripe to confirm."))}
+      <p class="muted" id="return-msg">Checking your plan…</p>
+    `);
+
+    // Poll the summary endpoint until the webhook has landed and
+    // flipped the customer to active (or until we've waited 15 s
+    // — Stripe usually fires the webhook in under a second).
+    const started = Date.now();
+    while (Date.now() - started < 15000) {
+      const body = await refreshSummary();
+      if (body && body.plan) {
+        const msg = $("return-msg");
+        if (msg) {
+          msg.textContent = `You're on Hexis ${planLabel(body.plan)}. Redirecting…`;
+        }
+        setTimeout(() => navigate("/billing", { replace: true }), 700);
+        return;
+      }
+      await sleep(1000);
+    }
+
+    const msg = $("return-msg");
+    if (msg) {
+      msg.innerHTML = html`
+        We haven't heard back from Stripe yet. It usually arrives
+        in seconds — refresh the Overview page in a moment, or
+        <a href="/billing" data-route>jump to Billing</a>.
+      `;
+    }
+  }
+
+  function sleep(ms) {
+    return new Promise((r) => setTimeout(r, ms));
+  }
+
+  async function doCheckout(plan) {
+    if (!state.csrfToken) {
+      alert("Please sign in again to continue.");
+      return;
+    }
+    const { status, body } = await apiFetch("/billing/checkout", {
+      method: "POST",
+      body: JSON.stringify({ plan }),
+    });
+    if (status === 200 && body && body.checkout_url) {
+      window.location.href = body.checkout_url;
+      return;
+    }
+    alert("Couldn't start Stripe checkout. Please try again.");
+  }
+
+  async function doPortal() {
+    if (!state.csrfToken) {
+      alert("Please sign in again to continue.");
+      return;
+    }
+    const { status, body } = await apiFetch("/billing/portal", {
+      method: "POST",
+      body: "{}",
+    });
+    if (status === 200 && body && body.portal_url) {
+      window.location.href = body.portal_url;
+      return;
+    }
+    alert("Couldn't open Customer Portal. Please try again.");
   }
 
   function renderApiKeys() {
@@ -516,6 +667,23 @@
   document.addEventListener("click", (e) => {
     const btn = e.target.closest("[data-landing-signin]");
     if (btn) openDialog();
+  });
+
+  // Plan checkout buttons on /subscription.
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-checkout]");
+    if (!btn || btn.disabled) return;
+    e.preventDefault();
+    const plan = btn.getAttribute("data-checkout");
+    doCheckout(plan);
+  });
+
+  // "Open Customer Portal" button on /billing.
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest("#btn-portal");
+    if (!btn) return;
+    e.preventDefault();
+    doPortal();
   });
 
   window.addEventListener("popstate", render);
