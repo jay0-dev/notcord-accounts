@@ -1,0 +1,10 @@
+# Cloudflare Pages — security headers applied to every response.
+# Format reference: https://developers.cloudflare.com/pages/configuration/headers/
+
+/*
+  Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self'; connect-src 'self' https://api.hexis.chat https://us-east-1.hexis.chat; frame-ancestors 'none'
