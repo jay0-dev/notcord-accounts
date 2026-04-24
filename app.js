@@ -497,16 +497,242 @@
     alert("Couldn't open Customer Portal. Please try again.");
   }
 
-  function renderApiKeys() {
+  async function renderApiKeys() {
     setView(html`
       ${raw(pageHeader("API keys", "Scoped, revocable tokens for personal automation and CI."))}
-      ${raw(
-        placeholderCard(
-          "No keys yet",
-          "API keys will carry a subset of your account's permissions and can be rotated at any time. Per-plan quotas apply (Core: 3 · Pro: 25)."
-        )
-      )}
+      <div id="keys-body">
+        <p class="muted">Loading…</p>
+      </div>
     `);
+
+    const { status, body } = await apiFetch("/api/v1/keys");
+    const bodyEl = $("keys-body");
+    if (!bodyEl) return;
+
+    if (status !== 200 || !body || !body.ok) {
+      bodyEl.innerHTML = html`<p class="error">Couldn't load keys.</p>`;
+      return;
+    }
+
+    const keys = body.keys || [];
+    const scopes = body.known_scopes || [];
+
+    bodyEl.innerHTML = html`
+      <div class="keys-toolbar">
+        <button class="primary" type="button" id="btn-new-key">New key</button>
+      </div>
+
+      ${
+        keys.length === 0
+          ? raw(html`
+              <div class="soon-card">
+                <div class="soon-card-head"><h2>No keys yet</h2></div>
+                <p>
+                  Press "New key" to mint one. Keys carry a subset
+                  of your account's permissions and can be revoked
+                  from this page at any time.
+                </p>
+              </div>
+            `)
+          : raw(html`
+              <table class="keys-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Scopes</th>
+                    <th>Last used</th>
+                    <th>Created</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${raw(keys.map(keyRow).join(""))}
+                </tbody>
+              </table>
+            `)
+      }
+    `;
+
+    // Stash the scope list on the button so the dialog renders it
+    // without refetching. Using dataset so the renderer stays
+    // declarative.
+    const btn = $("btn-new-key");
+    if (btn) btn.dataset.scopes = JSON.stringify(scopes);
+  }
+
+  function keyRow(k) {
+    return html`
+      <tr>
+        <td><strong>${k.name}</strong><div class="key-id">${k.public_id}</div></td>
+        <td>${k.scopes && k.scopes.length ? k.scopes.join(", ") : "—"}</td>
+        <td>${k.last_used_at ? fmtDate(k.last_used_at) : "never"}</td>
+        <td>${fmtDate(k.created_at)}</td>
+        <td><button class="ghost" type="button" data-revoke="${k.public_id}">Revoke</button></td>
+      </tr>
+    `;
+  }
+
+  function openNewKeyDialog(scopes) {
+    const dialog = ensureKeyDialog();
+    const form = dialog.querySelector("form");
+    form.reset();
+    form.querySelector("[data-role=error]").hidden = true;
+
+    const scopeList = form.querySelector("[data-role=scopes]");
+    scopeList.innerHTML = scopes
+      .map(
+        (s) => html`
+          <label class="scope-check">
+            <input type="checkbox" name="scope" value="${s}" />
+            <span>${s}</span>
+          </label>
+        `
+      )
+      .join("");
+
+    form.querySelector("[data-role=token-reveal]").hidden = true;
+    form.querySelector("[data-role=inputs]").hidden = false;
+    form.querySelector("[data-role=submit]").hidden = false;
+    form.querySelector("[data-role=close]").textContent = "Cancel";
+
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "open");
+  }
+
+  function ensureKeyDialog() {
+    let dialog = document.getElementById("new-key-dialog");
+    if (dialog) return dialog;
+
+    dialog = document.createElement("dialog");
+    dialog.id = "new-key-dialog";
+    dialog.className = "signin-dialog key-dialog";
+    dialog.innerHTML = html`
+      <form method="dialog">
+        <header>
+          <h3>New API key</h3>
+          <button type="button" class="dialog-close" data-role="close" aria-label="Close">×</button>
+        </header>
+
+        <div data-role="inputs">
+          <label for="new-key-name">Name</label>
+          <input
+            type="text"
+            id="new-key-name"
+            name="name"
+            placeholder="e.g. CI deploy"
+            required
+          />
+
+          <label>Scopes</label>
+          <div class="scope-list" data-role="scopes"></div>
+
+          <p class="signin-error" data-role="error" hidden></p>
+        </div>
+
+        <div data-role="token-reveal" hidden>
+          <p class="token-warning">
+            <strong>Copy this token now.</strong> We won't show it
+            again — if you lose it, revoke and create a new key.
+          </p>
+          <input type="text" data-role="token" readonly />
+        </div>
+
+        <div class="signin-actions">
+          <button type="button" class="ghost" data-role="cancel">Cancel</button>
+          <button type="submit" class="primary" data-role="submit">Create key</button>
+        </div>
+      </form>
+    `;
+
+    document.body.appendChild(dialog);
+
+    const form = dialog.querySelector("form");
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      submitNewKey(dialog);
+    });
+    dialog.querySelector("[data-role=close]").addEventListener("click", () =>
+      closeKeyDialog(dialog)
+    );
+    dialog.querySelector("[data-role=cancel]").addEventListener("click", () =>
+      closeKeyDialog(dialog)
+    );
+    dialog.addEventListener("cancel", (e) => {
+      e.preventDefault();
+      closeKeyDialog(dialog);
+    });
+
+    return dialog;
+  }
+
+  function closeKeyDialog(dialog) {
+    if (typeof dialog.close === "function") dialog.close();
+    else dialog.removeAttribute("open");
+    // Refresh the keys view after any close (it may have been a
+    // post-create reveal; either way the list may have changed).
+    if (location.pathname === "/api-keys") renderApiKeys();
+  }
+
+  async function submitNewKey(dialog) {
+    const form = dialog.querySelector("form");
+    const name = form.querySelector("#new-key-name").value.trim();
+    const scopes = Array.from(form.querySelectorAll("input[name=scope]:checked")).map(
+      (i) => i.value
+    );
+
+    const errEl = form.querySelector("[data-role=error]");
+    errEl.hidden = true;
+
+    if (!state.csrfToken) {
+      errEl.textContent = "Please sign in again.";
+      errEl.hidden = false;
+      return;
+    }
+
+    const { status, body } = await apiFetch("/api/v1/keys", {
+      method: "POST",
+      body: JSON.stringify({ name, scopes }),
+    });
+
+    if (status === 201 && body && body.ok) {
+      form.querySelector("[data-role=inputs]").hidden = true;
+      form.querySelector("[data-role=submit]").hidden = true;
+      form.querySelector("[data-role=close]").textContent = "Done";
+      form.querySelector("[data-role=cancel]").textContent = "Done";
+      const reveal = form.querySelector("[data-role=token-reveal]");
+      reveal.hidden = false;
+      const tokenInput = form.querySelector("[data-role=token]");
+      tokenInput.value = body.raw_token;
+      tokenInput.select();
+      return;
+    }
+
+    if (status === 409) {
+      errEl.textContent = "You've hit your plan's API-key quota.";
+    } else if (status === 400) {
+      errEl.textContent = "That scope isn't available.";
+    } else {
+      errEl.textContent = "Couldn't create the key. Please try again.";
+    }
+    errEl.hidden = false;
+  }
+
+  async function revokeKey(publicId) {
+    if (!state.csrfToken) {
+      alert("Please sign in again to continue.");
+      return;
+    }
+    if (!confirm("Revoke this key? Any script using it will stop working.")) return;
+
+    const { status } = await apiFetch(`/api/v1/keys/${encodeURIComponent(publicId)}`, {
+      method: "DELETE",
+    });
+
+    if (status === 200 || status === 204) {
+      renderApiKeys();
+    } else {
+      alert("Revoke failed. Please try again.");
+    }
   }
 
   function renderBots() {
@@ -684,6 +910,28 @@
     if (!btn) return;
     e.preventDefault();
     doPortal();
+  });
+
+  // "New key" button on /api-keys.
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest("#btn-new-key");
+    if (!btn) return;
+    e.preventDefault();
+    let scopes = [];
+    try {
+      scopes = JSON.parse(btn.dataset.scopes || "[]");
+    } catch {
+      /* empty fine */
+    }
+    openNewKeyDialog(scopes);
+  });
+
+  // Per-row revoke.
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-revoke]");
+    if (!btn) return;
+    e.preventDefault();
+    revokeKey(btn.getAttribute("data-revoke"));
   });
 
   window.addEventListener("popstate", render);
