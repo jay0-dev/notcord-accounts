@@ -735,16 +735,287 @@
     }
   }
 
-  function renderBots() {
+  async function renderBots() {
     setView(html`
       ${raw(pageHeader("Bots", "Register OAuth 2.1 + PKCE applications."))}
-      ${raw(
-        placeholderCard(
-          "No bot apps yet",
-          "Each bot gets a client_id, can specify redirect URIs and scopes, and runs the standard OAuth 2.1 authorization-code flow. Registration opens once the OAuth provider ships."
-        )
-      )}
+      <div id="bots-body">
+        <p class="muted">Loading…</p>
+      </div>
     `);
+
+    const { status, body } = await apiFetch("/api/v1/oauth/apps");
+    const bodyEl = $("bots-body");
+    if (!bodyEl) return;
+
+    if (status !== 200 || !body || !body.ok) {
+      bodyEl.innerHTML = html`<p class="error">Couldn't load apps.</p>`;
+      return;
+    }
+
+    const apps = body.apps || [];
+    const scopes = body.known_scopes || [];
+
+    bodyEl.innerHTML = html`
+      <div class="keys-toolbar">
+        <button class="primary" type="button" id="btn-new-bot">Register new app</button>
+      </div>
+
+      ${
+        apps.length === 0
+          ? raw(html`
+              <div class="soon-card">
+                <div class="soon-card-head"><h2>No apps yet</h2></div>
+                <p>
+                  Register an OAuth 2.1 application to let it act
+                  on a user's behalf. Public clients (CLI / desktop
+                  bots) get PKCE-only auth; confidential clients
+                  (server-side bots) also get a one-shot
+                  client_secret.
+                </p>
+                <p class="muted" style="margin-top: 8px;">
+                  New apps start as "Pending" — a Hexis admin has to
+                  approve them before they can complete a token
+                  exchange.
+                </p>
+              </div>
+            `)
+          : raw(html`
+              <div class="bots-grid">
+                ${raw(apps.map(botCard).join(""))}
+              </div>
+            `)
+      }
+    `;
+
+    const btn = $("btn-new-bot");
+    if (btn) btn.dataset.scopes = JSON.stringify(scopes);
+  }
+
+  function botCard(app) {
+    const badge = app.approved
+      ? '<span class="badge-pill badge-ok">Approved</span>'
+      : '<span class="badge-pill badge-pending">Pending review</span>';
+
+    const typeLabel = app.is_public_client
+      ? "public (PKCE-only)"
+      : "confidential";
+
+    return html`
+      <div class="bot-card">
+        <div class="bot-head">
+          <h2>${app.name}</h2>
+          ${raw(badge)}
+        </div>
+        ${app.description ? html`<p class="muted">${app.description}</p>` : ""}
+        <dl class="bot-meta">
+          <dt>Type</dt><dd>${typeLabel}</dd>
+          <dt>Redirect URIs</dt>
+          <dd>${app.redirect_uris.join(", ") || "—"}</dd>
+          <dt>Scopes</dt>
+          <dd>${app.scopes && app.scopes.length ? app.scopes.join(", ") : (app.allowed_scopes && app.allowed_scopes.join(", ")) || "—"}</dd>
+          <dt>Created</dt><dd>${fmtDate(app.created_at)}</dd>
+        </dl>
+        <div class="bot-actions">
+          <button class="ghost" type="button" data-revoke-bot="${app.public_id}">Delete</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function openNewBotDialog(scopes) {
+    const dialog = ensureBotDialog();
+    const form = dialog.querySelector("form");
+    form.reset();
+    form.querySelector("[data-role=error]").hidden = true;
+
+    const scopeList = form.querySelector("[data-role=scopes]");
+    scopeList.innerHTML = scopes
+      .map(
+        (s) => html`
+          <label class="scope-check">
+            <input type="checkbox" name="scope" value="${s}" />
+            <span>${s}</span>
+          </label>
+        `
+      )
+      .join("");
+
+    form.querySelector("[data-role=inputs]").hidden = false;
+    form.querySelector("[data-role=submit]").hidden = false;
+    form.querySelector("[data-role=reveal]").hidden = true;
+    form.querySelector("[data-role=close]").textContent = "Cancel";
+
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "open");
+  }
+
+  function ensureBotDialog() {
+    let dialog = document.getElementById("new-bot-dialog");
+    if (dialog) return dialog;
+
+    dialog = document.createElement("dialog");
+    dialog.id = "new-bot-dialog";
+    dialog.className = "signin-dialog key-dialog";
+    dialog.innerHTML = html`
+      <form method="dialog">
+        <header>
+          <h3>Register OAuth app</h3>
+          <button type="button" class="dialog-close" data-role="close" aria-label="Close">×</button>
+        </header>
+
+        <div data-role="inputs">
+          <label for="new-bot-name">Name</label>
+          <input type="text" id="new-bot-name" name="name" required />
+
+          <label for="new-bot-desc">Description (optional)</label>
+          <input type="text" id="new-bot-desc" name="description" />
+
+          <label for="new-bot-homepage">Homepage URL (optional)</label>
+          <input type="url" id="new-bot-homepage" name="homepage_url"
+                 placeholder="https://example.com" />
+
+          <label for="new-bot-redirects">Redirect URIs (one per line)</label>
+          <textarea id="new-bot-redirects" name="redirect_uris" rows="3"
+                    placeholder="https://example.com/oauth/callback&#10;hexis://oauth/callback"></textarea>
+
+          <label>Requested scopes</label>
+          <div class="scope-list" data-role="scopes"></div>
+
+          <label class="scope-check" style="margin-top: 12px;">
+            <input type="checkbox" id="new-bot-public" name="is_public_client" />
+            <span>Public client (native / CLI — no client secret, PKCE-only)</span>
+          </label>
+
+          <p class="signin-error" data-role="error" hidden></p>
+        </div>
+
+        <div data-role="reveal" hidden>
+          <p class="token-warning">
+            <strong>Copy your credentials now.</strong> The client
+            secret is shown only once. If you lose it, delete the
+            app and register a new one.
+          </p>
+          <label>Client ID</label>
+          <input type="text" data-role="client-id" readonly />
+          <label data-role="secret-label">Client secret</label>
+          <input type="text" data-role="client-secret" readonly />
+          <p class="muted" style="margin-top: 10px;">
+            Your app is pending admin approval. Once approved,
+            it can complete the OAuth 2.1 + PKCE authorization-code
+            flow.
+          </p>
+        </div>
+
+        <div class="signin-actions">
+          <button type="button" class="ghost" data-role="cancel">Cancel</button>
+          <button type="submit" class="primary" data-role="submit">Register</button>
+        </div>
+      </form>
+    `;
+
+    document.body.appendChild(dialog);
+
+    const form = dialog.querySelector("form");
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      submitNewBot(dialog);
+    });
+    dialog.querySelector("[data-role=close]").addEventListener("click", () =>
+      closeBotDialog(dialog)
+    );
+    dialog.querySelector("[data-role=cancel]").addEventListener("click", () =>
+      closeBotDialog(dialog)
+    );
+    dialog.addEventListener("cancel", (e) => {
+      e.preventDefault();
+      closeBotDialog(dialog);
+    });
+
+    return dialog;
+  }
+
+  function closeBotDialog(dialog) {
+    if (typeof dialog.close === "function") dialog.close();
+    else dialog.removeAttribute("open");
+    if (location.pathname === "/bots") renderBots();
+  }
+
+  async function submitNewBot(dialog) {
+    const form = dialog.querySelector("form");
+    const errEl = form.querySelector("[data-role=error]");
+    errEl.hidden = true;
+
+    if (!state.csrfToken) {
+      errEl.textContent = "Please sign in again.";
+      errEl.hidden = false;
+      return;
+    }
+
+    const name = form.querySelector("#new-bot-name").value.trim();
+    const description = form.querySelector("#new-bot-desc").value.trim();
+    const homepage_url = form.querySelector("#new-bot-homepage").value.trim();
+    const redirect_uris = form
+      .querySelector("#new-bot-redirects")
+      .value.split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const allowed_scopes = Array.from(
+      form.querySelectorAll("input[name=scope]:checked")
+    ).map((i) => i.value);
+    const is_public_client = form.querySelector("#new-bot-public").checked;
+
+    const { status, body } = await apiFetch("/api/v1/oauth/apps", {
+      method: "POST",
+      body: JSON.stringify({
+        name,
+        description: description || null,
+        homepage_url: homepage_url || null,
+        redirect_uris,
+        allowed_scopes,
+        is_public_client,
+      }),
+    });
+
+    if (status === 201 && body && body.ok) {
+      form.querySelector("[data-role=inputs]").hidden = true;
+      form.querySelector("[data-role=submit]").hidden = true;
+      form.querySelector("[data-role=close]").textContent = "Done";
+      form.querySelector("[data-role=cancel]").textContent = "Done";
+      const reveal = form.querySelector("[data-role=reveal]");
+      reveal.hidden = false;
+      form.querySelector("[data-role=client-id]").value = body.app.client_id;
+      const secretEl = form.querySelector("[data-role=client-secret]");
+      const secretLabel = form.querySelector("[data-role=secret-label]");
+      if (body.client_secret) {
+        secretEl.value = body.client_secret;
+        secretEl.hidden = false;
+        secretLabel.hidden = false;
+      } else {
+        secretEl.hidden = true;
+        secretLabel.hidden = true;
+      }
+      return;
+    }
+
+    if (status === 400) errEl.textContent = "One of those scopes isn't available.";
+    else if (status === 422) errEl.textContent = "Check your redirect URIs (https:// or a custom scheme) and other fields.";
+    else errEl.textContent = "Couldn't register the app. Please try again.";
+    errEl.hidden = false;
+  }
+
+  async function revokeBot(publicId) {
+    if (!state.csrfToken) {
+      alert("Please sign in again to continue.");
+      return;
+    }
+    if (!confirm("Delete this app? Any tokens it has issued stop working.")) return;
+
+    const { status } = await apiFetch(`/api/v1/oauth/apps/${encodeURIComponent(publicId)}`, {
+      method: "DELETE",
+    });
+
+    if (status === 200) renderBots();
+    else alert("Delete failed. Please try again.");
   }
 
   function renderGift() {
@@ -932,6 +1203,28 @@
     if (!btn) return;
     e.preventDefault();
     revokeKey(btn.getAttribute("data-revoke"));
+  });
+
+  // "Register new app" button on /bots.
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest("#btn-new-bot");
+    if (!btn) return;
+    e.preventDefault();
+    let scopes = [];
+    try {
+      scopes = JSON.parse(btn.dataset.scopes || "[]");
+    } catch {
+      /* empty fine */
+    }
+    openNewBotDialog(scopes);
+  });
+
+  // Per-app delete.
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-revoke-bot]");
+    if (!btn) return;
+    e.preventDefault();
+    revokeBot(btn.getAttribute("data-revoke-bot"));
   });
 
   window.addEventListener("popstate", render);
