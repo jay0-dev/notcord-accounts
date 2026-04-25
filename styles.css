@@ -605,6 +605,158 @@ footer .dot {
   text-transform: none;
 }
 
+/* ── Gift codes (Phase H) ──────────────────────────────────────── */
+
+.qty-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  justify-content: center;
+  margin-top: auto;
+  padding: 10px 0 4px;
+}
+
+.qty-row button.ghost {
+  font-family: inherit;
+  font-size: 18px;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.qty-row button.ghost:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.qty-value {
+  font-size: 20px;
+  font-weight: 700;
+  min-width: 24px;
+  text-align: center;
+}
+
+.gift-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 18px 0 24px;
+  padding: 16px 18px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.gift-summary .muted-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--muted);
+}
+
+.gift-summary .gift-total {
+  font-size: 28px;
+  font-weight: 800;
+}
+
+.gift-summary button {
+  font-family: inherit;
+  font-size: 13px;
+  padding: 10px 18px;
+  border-radius: 6px;
+  cursor: pointer;
+  background: var(--accent);
+  color: #1a1a1a;
+  border: 1px solid var(--accent);
+  font-weight: 600;
+}
+
+.gift-summary button[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.order-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin-bottom: 14px;
+}
+
+.order-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 12px;
+}
+
+.order-head h3 {
+  margin: 0;
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.codes-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.codes-table th,
+.codes-table td {
+  text-align: left;
+  padding: 8px 6px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+
+.codes-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.codes-table th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.code-cell {
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  background: var(--panel-2);
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: var(--accent);
+}
+
+.code-cell.muted-cell {
+  color: var(--muted);
+}
+
+.codes-table button.ghost {
+  font-family: inherit;
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--danger);
+}
+
+.codes-table button.ghost:hover {
+  border-color: var(--danger);
+}
+
 /* ── "Open Hexis app" CTA (Phase F) ────────────────────────────── */
 
 .open-app-cta {

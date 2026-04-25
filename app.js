@@ -1073,27 +1073,53 @@
     else alert("Delete failed. Please try again.");
   }
 
+  // ── /gift — pack picker ──────────────────────────────────────────
+
+  const giftState = { packs5: 0, packs10: 0 };
+
   function renderGift() {
     setView(html`
       ${raw(pageHeader("Gift codes", "Buy a pack to onboard friends."))}
       <div class="plan-grid">
-        <div class="plan-card">
+        <div class="plan-card" data-pack="5">
           <div class="plan-head">
             <h2>5-pack</h2>
             <div class="plan-price">$50<span> one-time</span></div>
           </div>
           <p class="plan-sub">$10 / code · 5 one-year Core invites</p>
-          <button class="primary" type="button" disabled>Coming soon</button>
+          <div class="qty-row">
+            <button class="ghost" type="button" data-qty="5" data-delta="-1">−</button>
+            <span class="qty-value" data-qty-value="5">${giftState.packs5}</span>
+            <button class="ghost" type="button" data-qty="5" data-delta="1">+</button>
+          </div>
         </div>
-        <div class="plan-card plan-card-pro">
+        <div class="plan-card plan-card-pro" data-pack="10">
           <div class="plan-head">
             <h2>10-pack</h2>
             <div class="plan-price">$80<span> one-time</span></div>
           </div>
           <p class="plan-sub">$8 / code · 10 one-year Core invites</p>
-          <button class="primary" type="button" disabled>Coming soon</button>
+          <div class="qty-row">
+            <button class="ghost" type="button" data-qty="10" data-delta="-1">−</button>
+            <span class="qty-value" data-qty-value="10">${giftState.packs10}</span>
+            <button class="ghost" type="button" data-qty="10" data-delta="1">+</button>
+          </div>
         </div>
       </div>
+
+      <div class="gift-summary">
+        <div>
+          <div class="muted-label">Total</div>
+          <div class="gift-total" id="gift-total">$0</div>
+          <div class="muted">${giftState.packs5 * 5 + giftState.packs10 * 10} codes</div>
+        </div>
+        <button class="primary" type="button" id="gift-checkout" ${
+          giftState.packs5 + giftState.packs10 === 0 ? "disabled" : ""
+        }>
+          Continue to Checkout
+        </button>
+      </div>
+
       ${raw(
         placeholderCard(
           "How redemption works",
@@ -1101,31 +1127,143 @@
         )
       )}
     `);
+
+    refreshGiftTotal();
   }
 
-  function renderGiftOrders() {
+  function refreshGiftTotal() {
+    const total = giftState.packs5 * 50 + giftState.packs10 * 80;
+    const el = $("gift-total");
+    if (el) el.textContent = "$" + total;
+
+    const btn = $("gift-checkout");
+    if (btn) btn.disabled = giftState.packs5 + giftState.packs10 === 0;
+  }
+
+  async function doGiftCheckout() {
+    if (!state.csrfToken) {
+      alert("Please sign in again to continue.");
+      return;
+    }
+
+    const packs = [];
+    if (giftState.packs5 > 0) packs.push({ size: 5, qty: giftState.packs5 });
+    if (giftState.packs10 > 0) packs.push({ size: 10, qty: giftState.packs10 });
+
+    const { status, body } = await apiFetch("/billing/gifts/purchase", {
+      method: "POST",
+      body: JSON.stringify({ packs }),
+    });
+
+    if (status === 200 && body && body.checkout_url) {
+      window.location.href = body.checkout_url;
+      return;
+    }
+
+    alert("Couldn't start Stripe checkout. Please try again.");
+  }
+
+  // ── /gift/orders — past purchases + per-code revoke ──────────────
+
+  async function renderGiftOrders() {
     setView(html`
       ${raw(pageHeader("Past gift orders", "Codes from packs you've purchased."))}
-      ${raw(
-        placeholderCard(
-          "No orders yet",
-          "Buying a pack from the Gift codes page will list it here with a copy-each affordance for each code. Unredeemed codes can be revoked for a partial refund until the 1-year expiry."
-        )
-      )}
+      <div id="gift-orders-body"><p class="muted">Loading…</p></div>
     `);
+
+    const { status, body } = await apiFetch("/api/v1/billing/gifts/orders");
+    const root = $("gift-orders-body");
+    if (!root) return;
+
+    if (status !== 200 || !body || !body.ok) {
+      root.innerHTML = `<p class="error">Couldn't load your orders.</p>`;
+      return;
+    }
+
+    const orders = body.orders || [];
+    if (orders.length === 0) {
+      root.innerHTML = html`
+        <div class="soon-card">
+          <div class="soon-card-head"><h2>No orders yet</h2></div>
+          <p>Once you buy a gift pack from the Gift codes page, your codes will appear here.</p>
+        </div>
+      `;
+      return;
+    }
+
+    root.innerHTML = orders.map(orderCard).join("");
   }
 
-  function renderRedeem() {
+  function orderCard(order) {
+    const codes = (order.codes || []).map(codeRow).join("");
+    return html`
+      <div class="order-card">
+        <div class="order-head">
+          <h3>${order.pack_size}-pack · $${(order.total_amount_cents / 100).toFixed(2)}</h3>
+          <span class="muted">${fmtDate(order.paid_at)}</span>
+        </div>
+        <table class="codes-table">
+          <thead>
+            <tr><th>Code</th><th>Status</th><th></th></tr>
+          </thead>
+          <tbody>${raw(codes)}</tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function codeRow(c) {
+    const status =
+      c.redeemed_at
+        ? `<span class="muted">Redeemed ${fmtDate(c.redeemed_at)}</span>`
+        : c.revoked_at
+        ? `<span class="muted">Revoked</span>`
+        : `<span class="muted">Unused — expires ${fmtDate(c.expires_at)}</span>`;
+
+    const action =
+      c.redeemed_at || c.revoked_at
+        ? ""
+        : `<button class="ghost" type="button" data-revoke-code="${c.id}">Revoke</button>`;
+
+    const codeCell = c.redeemed_at || c.revoked_at
+      ? `<code class="code-cell muted-cell">${c.code}</code>`
+      : `<code class="code-cell">${c.code}</code>`;
+
+    return html`
+      <tr>
+        <td>${raw(codeCell)}</td>
+        <td>${raw(status)}</td>
+        <td>${raw(action)}</td>
+      </tr>
+    `;
+  }
+
+  async function doGiftRevoke(codeId) {
+    if (!state.csrfToken) {
+      alert("Please sign in again to continue.");
+      return;
+    }
+    if (!confirm("Revoke this code? You'll get a partial refund for unused codes.")) return;
+
+    const { status } = await apiFetch("/api/v1/billing/gifts/revoke", {
+      method: "POST",
+      body: JSON.stringify({ code_id: parseInt(codeId, 10) }),
+    });
+
+    if (status === 200) renderGiftOrders();
+    else alert("Revoke failed.");
+  }
+
+  // ── /redeem — pre-signup account creation ────────────────────────
+
+  async function renderRedeem() {
     const params = new URLSearchParams(location.search);
     const prefill = params.get("code") || "";
+
     setView(html`
-      ${raw(
-        pageHeader(
-          "Redeem a gift code",
-          "Create a new Hexis account with a year of Core prepaid."
-        )
-      )}
-      <div class="redeem-card">
+      ${raw(pageHeader("Redeem a gift code", "Create a new Hexis account with a year of Core prepaid."))}
+
+      <div class="redeem-card" id="redeem-step">
         <label for="redeem-code">Gift code</label>
         <input
           type="text"
@@ -1136,14 +1274,158 @@
           autocomplete="off"
           spellcheck="false"
         />
-        <button class="primary" type="button" disabled>Continue (soon)</button>
+        <button class="primary" type="button" id="redeem-check">Check code</button>
         <p class="muted">
-          This flow ships once gift codes are live. Gift codes work
-          only when creating a new account — existing users can't
-          apply them to an existing subscription.
+          Gift codes work only when creating a new account — existing
+          accounts can't apply them.
         </p>
+        <p class="signin-error" id="redeem-error" hidden></p>
       </div>
     `);
+
+    if (prefill) {
+      // Auto-preflight on load.
+      doRedeemPreflight(prefill);
+    }
+  }
+
+  async function doRedeemPreflight(maybeCode) {
+    const errEl = $("redeem-error");
+    if (errEl) errEl.hidden = true;
+
+    const code = (maybeCode || ($("redeem-code") && $("redeem-code").value) || "").trim();
+    if (!code) {
+      showRedeemError("Enter a gift code.");
+      return;
+    }
+
+    const { status, body } = await apiFetch(
+      "/api/v1/billing/gifts/preflight?code=" + encodeURIComponent(code)
+    );
+
+    if (status === 200 && body && body.ok) {
+      showRedeemSignupForm(code);
+      return;
+    }
+
+    const reason = (body && body.error) || "unknown";
+    const msg =
+      reason === "expired"
+        ? "This code has expired."
+        : reason === "redeemed"
+        ? "This code has already been redeemed."
+        : reason === "revoked"
+        ? "This code is no longer valid. Ask the giver for a new one."
+        : "We don't recognise that code.";
+    showRedeemError(msg);
+  }
+
+  function showRedeemError(msg) {
+    const errEl = $("redeem-error");
+    if (errEl) {
+      errEl.textContent = msg;
+      errEl.hidden = false;
+    }
+  }
+
+  function showRedeemSignupForm(code) {
+    const root = $("redeem-step");
+    if (!root) return;
+
+    root.innerHTML = html`
+      <h3>Create your Hexis account</h3>
+      <p class="muted">Code: <code>${code}</code></p>
+
+      <label for="redeem-username">Username</label>
+      <input
+        type="text"
+        id="redeem-username"
+        autocapitalize="none"
+        autocorrect="off"
+        spellcheck="false"
+        required
+      />
+
+      <label for="redeem-password">Password</label>
+      <input type="password" id="redeem-password" required />
+
+      <label for="redeem-display">Display name (optional)</label>
+      <input type="text" id="redeem-display" />
+
+      <button class="primary" type="button" id="redeem-submit">Create account</button>
+      <p class="muted">
+        After this step we'll collect a card so your subscription
+        auto-renews at $12/yr in one year. Cancel any time before
+        then.
+      </p>
+      <p class="signin-error" id="redeem-error" hidden></p>
+    `;
+
+    root.dataset.code = code;
+  }
+
+  async function doRedeemSubmit() {
+    const root = $("redeem-step");
+    if (!root) return;
+
+    const code = root.dataset.code;
+    const username = ($("redeem-username") || {}).value || "";
+    const password = ($("redeem-password") || {}).value || "";
+    const display_name = ($("redeem-display") || {}).value || "";
+
+    if (!username || !password) {
+      showRedeemError("Username + password are required.");
+      return;
+    }
+
+    // 32 random bytes base64-encoded — matches register_user's
+    // identity_key constraint. The thick client generates a real
+    // MLS identity key on first login; this placeholder lets the
+    // account exist until then.
+    const ikBuf = new Uint8Array(32);
+    crypto.getRandomValues(ikBuf);
+    const identity_key = btoa(String.fromCharCode(...ikBuf));
+
+    const { status, body } = await apiFetch("/auth/web/signup", {
+      method: "POST",
+      body: JSON.stringify({
+        gift_code: code,
+        username,
+        password,
+        display_name: display_name || null,
+        identity_key,
+      }),
+    });
+
+    if (status === 201 && body && body.ok) {
+      state.user = body.user;
+      state.csrfToken = body.csrf_token;
+      await onSignedIn();
+
+      // Card collection step would normally redirect to a Stripe
+      // SetupIntent UI. For Phase H's first cut we surface a
+      // success state with instructions; full SetupIntent
+      // collection (Stripe Elements) is the next slice.
+      root.innerHTML = html`
+        <h3>Account created</h3>
+        <p class="muted">Welcome to Hexis, ${body.user.display_name || body.user.username}.</p>
+        <p>
+          Your gift covers the first year of Core. To finish setup,
+          we'll need a card on file before the year is up — head to
+          <a href="/billing" data-route>Billing</a> to add one.
+        </p>
+        <p>
+          <a href="/" class="primary" data-route>Open dashboard</a>
+        </p>
+      `;
+      return;
+    }
+
+    showRedeemError(
+      status === 422
+        ? "That username might already be taken — try another."
+        : "Couldn't create your account. Please try again."
+    );
   }
 
   function render404() {
@@ -1453,6 +1735,54 @@
     if (!btn) return;
     e.preventDefault();
     revokeBot(btn.getAttribute("data-revoke-bot"));
+  });
+
+  // /gift pack qty +/-
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-qty][data-delta]");
+    if (!btn) return;
+    e.preventDefault();
+    const size = parseInt(btn.getAttribute("data-qty"), 10);
+    const delta = parseInt(btn.getAttribute("data-delta"), 10);
+
+    if (size === 5) giftState.packs5 = Math.max(0, giftState.packs5 + delta);
+    if (size === 10) giftState.packs10 = Math.max(0, giftState.packs10 + delta);
+
+    const valueEl = document.querySelector(`[data-qty-value="${size}"]`);
+    if (valueEl) {
+      valueEl.textContent = size === 5 ? giftState.packs5 : giftState.packs10;
+    }
+    refreshGiftTotal();
+  });
+
+  // /gift checkout button
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest("#gift-checkout");
+    if (!btn || btn.disabled) return;
+    e.preventDefault();
+    doGiftCheckout();
+  });
+
+  // /gift/orders revoke per-code
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-revoke-code]");
+    if (!btn) return;
+    e.preventDefault();
+    doGiftRevoke(btn.getAttribute("data-revoke-code"));
+  });
+
+  // /redeem flow
+  document.addEventListener("click", (e) => {
+    if (e.target.closest("#redeem-check")) {
+      e.preventDefault();
+      doRedeemPreflight();
+      return;
+    }
+    if (e.target.closest("#redeem-submit")) {
+      e.preventDefault();
+      doRedeemSubmit();
+      return;
+    }
   });
 
   window.addEventListener("popstate", render);
