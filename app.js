@@ -26,6 +26,41 @@
     summary: null,
   };
 
+  // Phase F — sticky "from app" flag. The Hexis thick client
+  // appends ?return=app when it opens us in the system browser
+  // ("Manage subscription", "Manage API keys", etc.). Stash it in
+  // sessionStorage so it survives the Stripe round-trip; clear
+  // when the user explicitly leaves the dashboard.
+  if (new URLSearchParams(location.search).get("return") === "app") {
+    try { sessionStorage.setItem("hexis_from_app", "1"); } catch {}
+  }
+  const fromApp = () => {
+    try { return sessionStorage.getItem("hexis_from_app") === "1"; } catch { return false; }
+  };
+
+  // Build a hexis:// deep link target appropriate for `where`.
+  const deepLink = (where) => {
+    switch (where) {
+      case "billing": return "hexis://billing/return";
+      case "api-keys": return "hexis://settings/api-keys";
+      case "bots": return "hexis://settings/bots";
+      default: return "hexis://" + where;
+    }
+  };
+
+  // Render an "Open Hexis app" CTA when fromApp() is true. Returns
+  // an HTML fragment string (caller wraps with html`${raw(...)}`).
+  const openAppCta = (where, label) => {
+    if (!fromApp()) return "";
+    const target = deepLink(where);
+    return `
+      <div class="open-app-cta">
+        <a class="primary" href="${target}">${label || "Open Hexis app"}</a>
+        <p class="muted">Or stay here — close this tab when you're done.</p>
+      </div>
+    `;
+  };
+
   // ── DOM ──────────────────────────────────────────────────────────
   const $ = (id) => document.getElementById(id);
   const signInBtn = $("signin-btn");
@@ -444,9 +479,14 @@
       if (body && body.plan) {
         const msg = $("return-msg");
         if (msg) {
-          msg.textContent = `You're on Hexis ${planLabel(body.plan)}. Redirecting…`;
+          msg.innerHTML = html`
+            You're on Hexis ${planLabel(body.plan)}.
+            ${raw(openAppCta("billing", "Open Hexis app"))}
+          `;
         }
-        setTimeout(() => navigate("/billing", { replace: true }), 700);
+        if (!fromApp()) {
+          setTimeout(() => navigate("/billing", { replace: true }), 700);
+        }
         return;
       }
       await sleep(1000);
@@ -705,6 +745,14 @@
       const tokenInput = form.querySelector("[data-role=token]");
       tokenInput.value = body.raw_token;
       tokenInput.select();
+
+      // If the user came from the Hexis app, surface an
+      // "Open Hexis app" link so they don't have to alt-tab back.
+      if (fromApp()) {
+        const cta = document.createElement("div");
+        cta.innerHTML = openAppCta("api-keys", "Open Hexis app");
+        reveal.appendChild(cta.firstElementChild || cta);
+      }
       return;
     }
 
@@ -994,6 +1042,12 @@
       } else {
         secretEl.hidden = true;
         secretLabel.hidden = true;
+      }
+
+      if (fromApp()) {
+        const cta = document.createElement("div");
+        cta.innerHTML = openAppCta("bots", "Open Hexis app");
+        reveal.appendChild(cta.firstElementChild || cta);
       }
       return;
     }
