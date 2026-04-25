@@ -757,6 +757,34 @@ footer .dot {
   border-color: var(--danger);
 }
 
+.bundle-toggle {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 18px;
+  margin-bottom: 14px;
+}
+
+.bundle-plan-picker {
+  display: flex;
+  gap: 16px;
+  margin-top: 10px;
+  padding-left: 22px;
+}
+
+.pack-pick {
+  cursor: pointer;
+  transition: border-color 120ms ease;
+}
+
+.pack-pick:hover {
+  border-color: rgba(245, 193, 22, 0.45);
+}
+
+.signed-out-gift .redeem-card {
+  margin-top: 18px;
+}
+
 /* ── "Open Hexis app" CTA (Phase F) ────────────────────────────── */
 
 .open-app-cta {

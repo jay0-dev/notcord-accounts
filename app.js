@@ -1076,43 +1076,55 @@
 
   // ── /gift — pack picker ──────────────────────────────────────────
 
-  const giftState = { packs5: 0, packs10: 0 };
+  const giftState = {
+    packs5: 0,
+    packs10: 0,
+    bundle: false,         // include own subscription renewal
+    bundlePlan: "core",
+  };
 
   function renderGift() {
+    if (!state.user) {
+      return renderGiftSignedOut();
+    }
+
     setView(html`
       ${raw(pageHeader("Gift codes", "Buy a pack to onboard friends."))}
       <div class="plan-grid">
-        <div class="plan-card" data-pack="5">
-          <div class="plan-head">
-            <h2>5-pack</h2>
-            <div class="plan-price">$50<span> one-time</span></div>
-          </div>
-          <p class="plan-sub">$10 / code · 5 one-year Core invites</p>
-          <div class="qty-row">
-            <button class="ghost" type="button" data-qty="5" data-delta="-1">−</button>
-            <span class="qty-value" data-qty-value="5">${giftState.packs5}</span>
-            <button class="ghost" type="button" data-qty="5" data-delta="1">+</button>
-          </div>
-        </div>
-        <div class="plan-card plan-card-pro" data-pack="10">
-          <div class="plan-head">
-            <h2>10-pack</h2>
-            <div class="plan-price">$80<span> one-time</span></div>
-          </div>
-          <p class="plan-sub">$8 / code · 10 one-year Core invites</p>
-          <div class="qty-row">
-            <button class="ghost" type="button" data-qty="10" data-delta="-1">−</button>
-            <span class="qty-value" data-qty-value="10">${giftState.packs10}</span>
-            <button class="ghost" type="button" data-qty="10" data-delta="1">+</button>
-          </div>
+        ${raw(packPickerCardHtml(5, giftState.packs5))}
+        ${raw(packPickerCardHtml(10, giftState.packs10))}
+      </div>
+
+      <div class="bundle-toggle">
+        <label class="scope-check">
+          <input type="checkbox" id="gift-bundle" ${giftState.bundle ? "checked" : ""} />
+          <span>Also renew my own plan for another year</span>
+        </label>
+        <div class="bundle-plan-picker" id="bundle-plan-picker" ${
+          giftState.bundle ? "" : 'hidden'
+        }>
+          <label class="scope-check">
+            <input type="radio" name="bundle-plan" value="core" ${
+              giftState.bundlePlan === "core" ? "checked" : ""
+            } />
+            <span>Core · $12/yr</span>
+          </label>
+          <label class="scope-check">
+            <input type="radio" name="bundle-plan" value="pro" ${
+              giftState.bundlePlan === "pro" ? "checked" : ""
+            } />
+            <span>Pro · $50/yr</span>
+          </label>
         </div>
       </div>
 
       <div class="gift-summary">
         <div>
-          <div class="muted-label">Total</div>
+          <div class="muted-label">Total today</div>
           <div class="gift-total" id="gift-total">$0</div>
-          <div class="muted">${giftState.packs5 * 5 + giftState.packs10 * 10} codes</div>
+          <div class="muted" id="gift-total-sub">
+            ${giftState.packs5 * 5 + giftState.packs10 * 10} codes
+          </div>
         </div>
         <button class="primary" type="button" id="gift-checkout" ${
           giftState.packs5 + giftState.packs10 === 0 ? "disabled" : ""
@@ -1132,13 +1144,189 @@
     refreshGiftTotal();
   }
 
+  function packPickerCardHtml(size, qty) {
+    const isPro = size === 10;
+    const price = size === 5 ? "$50" : "$80";
+    const perCode = size === 5 ? "$10" : "$8";
+    return `
+      <div class="plan-card ${isPro ? "plan-card-pro" : ""}" data-pack="${size}">
+        <div class="plan-head">
+          <h2>${size}-pack</h2>
+          <div class="plan-price">${price}<span> one-time</span></div>
+        </div>
+        <p class="plan-sub">${perCode} / code · ${size} one-year Core invites</p>
+        <div class="qty-row">
+          <button class="ghost" type="button" data-qty="${size}" data-delta="-1">−</button>
+          <span class="qty-value" data-qty-value="${size}">${qty}</span>
+          <button class="ghost" type="button" data-qty="${size}" data-delta="1">+</button>
+        </div>
+      </div>`;
+  }
+
+  // ── /gift signed-out — pack-at-signup pre-account flow ──────────
+
+  function renderGiftSignedOut() {
+    setView(html`
+      ${raw(pageHeader("Start with a gift pack", "Pick a pack and create your Hexis account in one step."))}
+
+      <div class="signed-out-gift">
+        <div class="plan-grid">
+          <div class="plan-card pack-pick" data-pack-size="5" id="pack-pick-5">
+            <div class="plan-head">
+              <h2>5-pack</h2>
+              <div class="plan-price">$50<span> one-time</span></div>
+            </div>
+            <p class="plan-sub">One code prepays your year of Core. The other 4 are yours to give away.</p>
+          </div>
+          <div class="plan-card plan-card-pro pack-pick" data-pack-size="10" id="pack-pick-10">
+            <div class="plan-head">
+              <h2>10-pack</h2>
+              <div class="plan-price">$80<span> one-time</span></div>
+            </div>
+            <p class="plan-sub">One code prepays your year of Core. The other 9 are yours to give away.</p>
+          </div>
+        </div>
+
+        <div class="redeem-card" id="pack-signup-form">
+          <h3>Create your Hexis account</h3>
+          <p class="muted" id="pack-signup-pack">Pick a pack above to continue.</p>
+
+          <label for="pack-username">Username</label>
+          <input type="text" id="pack-username" autocapitalize="none" autocorrect="off" spellcheck="false" required />
+
+          <label for="pack-password">Password</label>
+          <input type="password" id="pack-password" required />
+
+          <label for="pack-display">Display name (optional)</label>
+          <input type="text" id="pack-display" />
+
+          <label for="pack-country">Country</label>
+          <select id="pack-country" required>
+            ${raw(countryOptionsHtml())}
+          </select>
+
+          <button class="primary" type="button" id="pack-submit" disabled>Continue to Checkout</button>
+          <p class="muted">
+            We'll redirect you to Stripe to pay; one of the codes
+            in your pack auto-redeems for your year of Core.
+          </p>
+          <p class="signin-error" id="pack-error" hidden></p>
+        </div>
+
+        <p class="muted">
+          Already have an account? <a href="#" data-landing-signin>Sign in</a> to buy packs from the dashboard instead.
+        </p>
+      </div>
+    `);
+  }
+
+  let pickedPackSize = null;
+  function pickPackSizeForSignup(size) {
+    pickedPackSize = size;
+
+    document.querySelectorAll(".pack-pick").forEach((el) => {
+      el.classList.toggle("plan-card-active", el.getAttribute("data-pack-size") === String(size));
+    });
+
+    const lbl = $("pack-signup-pack");
+    if (lbl) {
+      lbl.textContent =
+        size === 5
+          ? "5-pack — one code activates your account, four to give away."
+          : "10-pack — one code activates your account, nine to give away.";
+    }
+
+    const btn = $("pack-submit");
+    if (btn) btn.disabled = !size;
+  }
+
+  async function doPackAtSignupSubmit() {
+    const errEl = $("pack-error");
+    if (errEl) errEl.hidden = true;
+
+    if (!pickedPackSize) {
+      showPackError("Pick a pack first.");
+      return;
+    }
+
+    const username = ($("pack-username") || {}).value || "";
+    const password = ($("pack-password") || {}).value || "";
+    const display_name = ($("pack-display") || {}).value || "";
+    const country = ($("pack-country") || {}).value || "";
+
+    if (!username || !password) {
+      showPackError("Username + password are required.");
+      return;
+    }
+    if (!country) {
+      showPackError("Please pick your country.");
+      return;
+    }
+
+    const ikBuf = new Uint8Array(32);
+    crypto.getRandomValues(ikBuf);
+    const identity_key = btoa(String.fromCharCode(...ikBuf));
+
+    const { status, body } = await apiFetch("/billing/gifts/purchase-at-signup", {
+      method: "POST",
+      body: JSON.stringify({
+        username,
+        password,
+        display_name: display_name || null,
+        identity_key,
+        country,
+        pack_size: pickedPackSize,
+      }),
+    });
+
+    if (status === 202 && body && body.identity_required) {
+      window.location.href = body.verification_url;
+      return;
+    }
+
+    if (status === 200 && body && body.checkout_url) {
+      window.location.href = body.checkout_url;
+      return;
+    }
+
+    showPackError(
+      status === 422
+        ? "That username might already be taken — try another."
+        : (body && body.error) || "Couldn't start checkout. Please try again."
+    );
+  }
+
+  function showPackError(msg) {
+    const errEl = $("pack-error");
+    if (errEl) {
+      errEl.textContent = msg;
+      errEl.hidden = false;
+    }
+  }
+
   function refreshGiftTotal() {
-    const total = giftState.packs5 * 50 + giftState.packs10 * 80;
+    const packsTotal = giftState.packs5 * 50 + giftState.packs10 * 80;
+    const subAdd = giftState.bundle ? (giftState.bundlePlan === "pro" ? 50 : 12) : 0;
+    const total = packsTotal + subAdd;
+
     const el = $("gift-total");
     if (el) el.textContent = "$" + total;
 
+    const subEl = $("gift-total-sub");
+    if (subEl) {
+      const codes = giftState.packs5 * 5 + giftState.packs10 * 10;
+      const recurring = giftState.bundle ? (giftState.bundlePlan === "pro" ? 50 : 12) : 0;
+      subEl.textContent =
+        recurring > 0
+          ? `${codes} codes · then $${recurring}/yr recurring`
+          : `${codes} codes`;
+    }
+
     const btn = $("gift-checkout");
     if (btn) btn.disabled = giftState.packs5 + giftState.packs10 === 0;
+
+    const picker = $("bundle-plan-picker");
+    if (picker) picker.hidden = !giftState.bundle;
   }
 
   async function doGiftCheckout() {
@@ -1151,9 +1339,14 @@
     if (giftState.packs5 > 0) packs.push({ size: 5, qty: giftState.packs5 });
     if (giftState.packs10 > 0) packs.push({ size: 10, qty: giftState.packs10 });
 
+    const payload = { packs };
+    if (giftState.bundle) {
+      payload.include_self_sub = { plan: giftState.bundlePlan };
+    }
+
     const { status, body } = await apiFetch("/billing/gifts/purchase", {
       method: "POST",
-      body: JSON.stringify({ packs }),
+      body: JSON.stringify(payload),
     });
 
     if (status === 200 && body && body.checkout_url) {
@@ -1518,15 +1711,20 @@
       if (status === 200 && body && body.status) {
         switch (body.status) {
           case "verified":
+            // Pack-at-signup flows produce a Stripe Checkout URL
+            // post-Identity — navigate the user to it now so
+            // they can pay for the pack.
+            if (body.checkout_url) {
+              window.location.href = body.checkout_url;
+              return;
+            }
+
             if (root) {
               root.innerHTML = html`
                 <p>Verified. Your account is ready —
                 <a href="/" class="primary" data-route>open the dashboard</a>.</p>
               `;
             }
-            // The user was created server-side but not yet
-            // signed in (no session cookie was set during the
-            // webhook). Nudge them to sign in normally.
             return;
 
           case "blocked_under_18":
@@ -1947,6 +2145,37 @@
       doRedeemSubmit();
       return;
     }
+  });
+
+  // /gift bundle toggle + plan radios.
+  document.addEventListener("change", (e) => {
+    if (e.target && e.target.id === "gift-bundle") {
+      giftState.bundle = !!e.target.checked;
+      refreshGiftTotal();
+      return;
+    }
+
+    if (e.target && e.target.name === "bundle-plan") {
+      giftState.bundlePlan = e.target.value === "pro" ? "pro" : "core";
+      refreshGiftTotal();
+      return;
+    }
+  });
+
+  // /gift signed-out — pack-at-signup pack picker.
+  document.addEventListener("click", (e) => {
+    const card = e.target.closest(".pack-pick[data-pack-size]");
+    if (!card) return;
+    e.preventDefault();
+    pickPackSizeForSignup(parseInt(card.getAttribute("data-pack-size"), 10));
+  });
+
+  // /gift signed-out — submit button on the pack-at-signup form.
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest("#pack-submit");
+    if (!btn || btn.disabled) return;
+    e.preventDefault();
+    doPackAtSignupSubmit();
   });
 
   window.addEventListener("popstate", render);
