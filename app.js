@@ -181,6 +181,7 @@
     { path: "/gift/orders",      render: renderGiftOrders,     auth: true  },
     { path: "/redeem",           render: renderRedeem,         auth: false },
     { path: "/oauth/authorize",  render: renderOauthAuthorize, auth: false },
+    { path: "/redeem/return",    render: renderRedeemReturn,   auth: false },
   ];
 
   function matchRoute(path) {
@@ -1352,6 +1353,16 @@
       <label for="redeem-display">Display name (optional)</label>
       <input type="text" id="redeem-display" />
 
+      <label for="redeem-country">Country</label>
+      <select id="redeem-country" required>
+        ${raw(countryOptionsHtml())}
+      </select>
+      <p class="muted">
+        Some regions require a one-time identity check before
+        creating an account. We only keep a cryptographic hash —
+        not your documents.
+      </p>
+
       <button class="primary" type="button" id="redeem-submit">Create account</button>
       <p class="muted">
         After this step we'll collect a card so your subscription
@@ -1364,6 +1375,44 @@
     root.dataset.code = code;
   }
 
+  // Trim country list — most popular plus the Identity-required
+  // ones called out in the spec. Adding more here is operator
+  // copy work.
+  function countryOptionsHtml() {
+    const opts = [
+      ["", "Select…"],
+      ["US", "United States"],
+      ["CA", "Canada"],
+      ["MX", "Mexico"],
+      ["BR", "Brazil"],
+      ["AR", "Argentina"],
+      ["GB", "United Kingdom"],
+      ["IE", "Ireland"],
+      ["FR", "France"],
+      ["DE", "Germany"],
+      ["NL", "Netherlands"],
+      ["ES", "Spain"],
+      ["IT", "Italy"],
+      ["SE", "Sweden"],
+      ["NO", "Norway"],
+      ["DK", "Denmark"],
+      ["FI", "Finland"],
+      ["PL", "Poland"],
+      ["TR", "Turkey"],
+      ["AU", "Australia"],
+      ["NZ", "New Zealand"],
+      ["JP", "Japan"],
+      ["KR", "South Korea"],
+      ["IN", "India"],
+      ["SG", "Singapore"],
+      ["HK", "Hong Kong"],
+      ["ZA", "South Africa"],
+    ];
+    return opts
+      .map(([code, label]) => `<option value="${code}">${label}</option>`)
+      .join("");
+  }
+
   async function doRedeemSubmit() {
     const root = $("redeem-step");
     if (!root) return;
@@ -1372,16 +1421,17 @@
     const username = ($("redeem-username") || {}).value || "";
     const password = ($("redeem-password") || {}).value || "";
     const display_name = ($("redeem-display") || {}).value || "";
+    const country = ($("redeem-country") || {}).value || "";
 
     if (!username || !password) {
       showRedeemError("Username + password are required.");
       return;
     }
+    if (!country) {
+      showRedeemError("Please pick your country.");
+      return;
+    }
 
-    // 32 random bytes base64-encoded — matches register_user's
-    // identity_key constraint. The thick client generates a real
-    // MLS identity key on first login; this placeholder lets the
-    // account exist until then.
     const ikBuf = new Uint8Array(32);
     crypto.getRandomValues(ikBuf);
     const identity_key = btoa(String.fromCharCode(...ikBuf));
@@ -1394,18 +1444,22 @@
         password,
         display_name: display_name || null,
         identity_key,
+        country,
       }),
     });
+
+    // Phase I — Identity-gated regions get bounced through Stripe
+    // Identity before the user row is created.
+    if (status === 202 && body && body.identity_required) {
+      window.location.href = body.verification_url;
+      return;
+    }
 
     if (status === 201 && body && body.ok) {
       state.user = body.user;
       state.csrfToken = body.csrf_token;
       await onSignedIn();
 
-      // Card collection step would normally redirect to a Stripe
-      // SetupIntent UI. For Phase H's first cut we surface a
-      // success state with instructions; full SetupIntent
-      // collection (Stripe Elements) is the next slice.
       root.innerHTML = html`
         <h3>Account created</h3>
         <p class="muted">Welcome to Hexis, ${body.user.display_name || body.user.username}.</p>
@@ -1426,6 +1480,116 @@
         ? "That username might already be taken — try another."
         : "Couldn't create your account. Please try again."
     );
+  }
+
+  // ── /redeem/return — Identity verification poll page ────────────
+
+  async function renderRedeemReturn() {
+    const params = new URLSearchParams(location.search);
+    const token = params.get("signup_token");
+
+    if (!token) {
+      setView(html`
+        ${raw(pageHeader("Verification", ""))}
+        <p class="error">Missing signup token. Please restart from the redeem link.</p>
+      `);
+      return;
+    }
+
+    setView(html`
+      ${raw(pageHeader("Finishing verification", "Just a moment — we're checking the result."))}
+      <div id="identity-body">
+        <p class="muted">Waiting for Stripe…</p>
+      </div>
+    `);
+
+    await pollIdentity(token);
+  }
+
+  async function pollIdentity(token) {
+    const startedAt = Date.now();
+    const root = $("identity-body");
+
+    while (Date.now() - startedAt < 60_000) {
+      const { status, body } = await apiFetch(
+        "/api/v1/identity/status?signup_token=" + encodeURIComponent(token)
+      );
+
+      if (status === 200 && body && body.status) {
+        switch (body.status) {
+          case "verified":
+            if (root) {
+              root.innerHTML = html`
+                <p>Verified. Your account is ready —
+                <a href="/" class="primary" data-route>open the dashboard</a>.</p>
+              `;
+            }
+            // The user was created server-side but not yet
+            // signed in (no session cookie was set during the
+            // webhook). Nudge them to sign in normally.
+            return;
+
+          case "blocked_under_18":
+            if (root) {
+              root.innerHTML = `
+                <div class="oauth-error">
+                  <h2>We can't create an account for you at this time.</h2>
+                </div>`;
+            }
+            return;
+
+          case "account_exists":
+            if (root) {
+              root.innerHTML = `
+                <div class="oauth-error">
+                  <h2>An account with this identity already exists.</h2>
+                  <p>Sign in to your existing account instead.</p>
+                </div>`;
+            }
+            return;
+
+          case "failed":
+            if (root) {
+              root.innerHTML = `
+                <div class="oauth-error">
+                  <h2>Verification failed.</h2>
+                  <p><a href="/redeem">Try again</a> or contact support.</p>
+                </div>`;
+            }
+            return;
+
+          case "requires_input":
+            if (root) {
+              root.innerHTML = `
+                <div class="oauth-error">
+                  <h2>Stripe needs another attempt.</h2>
+                  <p><a href="/redeem">Restart the redeem flow</a> to retry.</p>
+                </div>`;
+            }
+            return;
+
+          // pending → keep polling
+        }
+      } else if (status === 410) {
+        if (root) {
+          root.innerHTML = `
+            <div class="oauth-error">
+              <h2>Verification window expired.</h2>
+              <p><a href="/redeem">Restart the redeem flow</a> to try again.</p>
+            </div>`;
+        }
+        return;
+      }
+
+      await sleep(2000);
+    }
+
+    if (root) {
+      root.innerHTML = `
+        <p class="muted">Still waiting on Stripe.
+        <a href="/redeem/return?signup_token=${token}" data-route>Refresh</a>
+        in a moment.</p>`;
+    }
   }
 
   function render404() {
