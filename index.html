@@ -56,10 +56,18 @@
 
       <p class="signin-error" id="signin-error" hidden></p>
 
+      <p class="muted" style="text-align: center; margin: 0.5rem 0;">
+        <a href="/forgot-password" data-route id="signin-forgot">Forgot password?</a>
+      </p>
+
       <div class="signin-actions">
         <button type="button" class="ghost" id="signin-cancel">Cancel</button>
         <button type="submit" class="primary" id="signin-submit">Sign in</button>
       </div>
+
+      <p class="muted" style="text-align: center; margin: 0.75rem 0 0;">
+        Don't have an account? <a href="/register" data-route id="signin-register">Create one</a>.
+      </p>
     </form>
   </dialog>
 
@@ -170,6 +178,6 @@
     <a href="https://hexis.chat">hexis.chat</a>
   </footer>
 
-  <script src="/app.js" defer></script>
+  <script src="/app.js" type="module"></script>
 </body>
 </html>

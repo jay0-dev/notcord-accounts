@@ -142,6 +142,14 @@
         body: JSON.stringify({ username, password }),
       });
       if (status === 200 && body && body.ok) {
+        // Phase J6.5 — username+password verified, but the
+        // account has 2FA enrolled. Don't close the dialog yet;
+        // ask for the 6-digit code (or backup code).
+        if (body.requires_totp && body.challenge_token) {
+          await promptTotpForLogin(body.challenge_token);
+          return;
+        }
+
         state.csrfToken = body.csrf_token;
         state.user = body.user;
         closeDialog();
@@ -159,9 +167,10 @@
   }
 
   async function doLogout() {
-    if (state.csrfToken) {
-      await apiFetch("/auth/web/logout", { method: "POST", body: "{}" });
-    }
+    // /auth/web/logout is CSRF-exempt (logout has no destructive
+    // user-data impact and SPA reloads can lose the in-memory
+    // CSRF token), so we can always call it even without one.
+    await apiFetch("/auth/web/logout", { method: "POST", body: "{}" });
     state.csrfToken = null;
     state.user = null;
     state.summary = null;
@@ -177,11 +186,19 @@
     { path: "/billing/return",   render: renderBillingReturn,  auth: true  },
     { path: "/api-keys",         render: renderApiKeys,        auth: true  },
     { path: "/bots",             render: renderBots,           auth: true  },
-    { path: "/gift",             render: renderGift,           auth: true  },
+    { path: "/gift",             render: renderGift,           auth: false },
     { path: "/gift/orders",      render: renderGiftOrders,     auth: true  },
     { path: "/redeem",           render: renderRedeem,         auth: false },
     { path: "/oauth/authorize",  render: renderOauthAuthorize, auth: false },
     { path: "/redeem/return",    render: renderRedeemReturn,   auth: false },
+    // Phase J5 — browser register + onboarding flow.
+    { path: "/register",         render: renderRegister,         auth: false },
+    { path: "/welcome",          render: renderWelcome,          auth: true  },
+    { path: "/verify-email/done",render: renderVerifyEmailDone,  auth: false },
+    { path: "/forgot-password",  render: renderForgotPassword,   auth: false },
+    { path: "/reset-password",   render: renderResetPassword,    auth: false },
+    { path: "/setup-2fa",        render: renderSetupTotp,        auth: true  },
+    { path: "/move-squad",       render: renderMoveSquad,        auth: true  },
   ];
 
   function matchRoute(path) {
@@ -2038,6 +2055,14 @@
     if (btn) openDialog();
   });
 
+  // Close the sign-in dialog before navigating away when the user
+  // clicks "Forgot password?" or "Create one" inside it.
+  document.addEventListener("click", (e) => {
+    if (e.target.closest("#signin-forgot") || e.target.closest("#signin-register")) {
+      try { document.getElementById("signin-dialog")?.close(); } catch {}
+    }
+  });
+
   // Plan checkout buttons on /subscription.
   document.addEventListener("click", (e) => {
     const btn = e.target.closest("[data-checkout]");
@@ -2179,6 +2204,586 @@
   });
 
   window.addEventListener("popstate", render);
+
+  // ── Phase J5 — browser register + onboarding ───────────────────
+
+  function renderRegister() {
+    setView(html`
+      ${raw(pageHeader("Create your Hexis account", "Pick a username, set a password, and verify your email."))}
+
+      <div class="redeem-card" id="register-step">
+        <label for="reg-username">Username</label>
+        <input type="text" id="reg-username" autocapitalize="none" autocorrect="off"
+               spellcheck="false" pattern="[a-zA-Z0-9_.\\-]{2,32}" required />
+
+        <label for="reg-email">Email</label>
+        <input type="email" id="reg-email" autocomplete="email" required />
+
+        <label for="reg-display">Display name (optional)</label>
+        <input type="text" id="reg-display" />
+
+        <label for="reg-password">Password (8+ characters)</label>
+        <input type="password" id="reg-password" minlength="8" autocomplete="new-password" required />
+
+        <label for="reg-password2">Confirm password</label>
+        <input type="password" id="reg-password2" minlength="8" autocomplete="new-password" required />
+
+        <button class="primary" type="button" id="register-submit">Create account</button>
+
+        <p class="muted">
+          We'll email you a verification link, then walk you through setting up
+          two-factor auth.
+        </p>
+        <p class="signin-error" id="register-error" hidden></p>
+      </div>
+    `);
+  }
+
+  async function doRegisterSubmit() {
+    const errEl = $("register-error");
+    if (errEl) errEl.hidden = true;
+    const submit = $("register-submit");
+    if (submit) { submit.disabled = true; submit.textContent = "Creating…"; }
+
+    const username = $("reg-username").value.trim();
+    const email = $("reg-email").value.trim();
+    const display = $("reg-display").value.trim();
+    const password = $("reg-password").value;
+    const password2 = $("reg-password2").value;
+
+    function fail(msg) {
+      if (errEl) { errEl.textContent = msg; errEl.hidden = false; }
+      if (submit) { submit.disabled = false; submit.textContent = "Create account"; }
+    }
+
+    if (password !== password2) return fail("Passwords don't match.");
+    if (password.length < 8) return fail("Password must be at least 8 characters.");
+
+    let keys;
+    try {
+      const mod = await import("/keys.js");
+      keys = await mod.generateAccountKeys(password);
+    } catch (e) {
+      return fail("Couldn't generate cryptographic keys: " + e.message);
+    }
+
+    const { status, body } = await apiFetch("/auth/web/register", {
+      method: "POST",
+      body: JSON.stringify({
+        username,
+        email,
+        password,
+        display_name: display || null,
+        identity_key: keys.identity_key_b64,
+        mlkem_ek: keys.mlkem_ek_b64,
+      }),
+    });
+
+    if (status === 201 && body && body.ok) {
+      state.user = body.user;
+      state.csrfToken = body.csrf_token;
+      // Per phase J6.5, post-register lands on /setup-2fa.
+      navigate("/setup-2fa", { replace: true });
+      return;
+    }
+
+    const reason = (body && body.error) || "unknown";
+    if (reason === "username_taken") return fail("That username is already taken.");
+    if (reason === "email_taken") return fail("That email is already in use.");
+    if (reason === "bad_identity_key") return fail("Couldn't generate a valid identity key.");
+    fail("Couldn't create the account. Try again or contact support.");
+  }
+
+  function renderWelcome() {
+    const params = new URLSearchParams(location.search);
+    const fromDesktop = params.get("from") === "desktop";
+
+    const cards = `
+      <div class="plan-grid">
+        <div class="plan-card pack-pick" id="welcome-pay">
+          <div class="plan-head">
+            <h2>Pay for a plan</h2>
+            <div class="plan-price">$12+<span> / year</span></div>
+          </div>
+          <p class="plan-sub">Core or Pro — billed via Stripe. Cancel anytime.</p>
+        </div>
+        <div class="plan-card pack-pick" id="welcome-redeem">
+          <div class="plan-head">
+            <h2>Redeem a gift code</h2>
+            <div class="plan-price">free<span> for you</span></div>
+          </div>
+          <p class="plan-sub">Got a code from a friend? It prepays your year of Core.</p>
+        </div>
+        <div class="plan-card plan-card-pro pack-pick" id="welcome-squad">
+          <div class="plan-head">
+            <h2>Move your Squad</h2>
+            <div class="plan-price">$50+<span> one-time</span></div>
+          </div>
+          <p class="plan-sub">Buy a 5- or 10-pack — one code redeems for you, the rest are yours to give away.</p>
+        </div>
+      </div>`;
+
+    const continueDesktop = fromDesktop
+      ? `<p style="margin-top: 2rem;"><a class="primary" href="hexis://login?email=${encodeURIComponent(state.user?.email || "")}">Continue in Hexis (desktop)</a></p>`
+      : "";
+
+    setView(html`
+      ${raw(pageHeader("You're in. Pick how to get started.", "All three options unlock the full Hexis experience — choose what fits."))}
+      ${raw(cards + continueDesktop)}
+    `);
+  }
+
+  function renderVerifyEmailDone() {
+    setView(html`
+      ${raw(pageHeader("Email verified", "Your Hexis email is now confirmed."))}
+
+      <div class="redeem-card">
+        <p>Thanks — your email is on file. You can close this tab, or
+        <a href="/welcome" data-route>continue setting up your account</a>.</p>
+      </div>
+    `);
+  }
+
+  function renderForgotPassword() {
+    setView(html`
+      ${raw(pageHeader("Forgot your password?", "Enter your email and we'll send a reset link."))}
+
+      <div class="redeem-card" id="forgot-step">
+        <label for="forgot-email">Email</label>
+        <input type="email" id="forgot-email" autocomplete="email" required />
+
+        <button class="primary" type="button" id="forgot-submit">Send reset link</button>
+        <p class="muted">If the email is on file, a reset link is on its way.</p>
+        <p class="signin-error" id="forgot-error" hidden></p>
+      </div>
+    `);
+  }
+
+  async function doForgotSubmit() {
+    const submit = $("forgot-submit");
+    if (submit) { submit.disabled = true; submit.textContent = "Sending…"; }
+
+    const email = $("forgot-email").value.trim();
+    if (!email) {
+      if (submit) { submit.disabled = false; submit.textContent = "Send reset link"; }
+      return;
+    }
+
+    await apiFetch("/auth/web/password/forgot", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+
+    // Always 200 (anti-enumeration). Show a confirmation regardless.
+    const root = $("forgot-step");
+    if (root) {
+      root.innerHTML = html`
+        <h3>Check your inbox</h3>
+        <p>If <strong>${email}</strong> is on file, a reset link is on its way.</p>
+        <p class="muted">The link is valid for 1 hour. Didn't get it? Check spam or
+        <a href="/forgot-password" data-route>try again</a>.</p>
+      `;
+    }
+  }
+
+  function renderResetPassword() {
+    const params = new URLSearchParams(location.search);
+    const token = params.get("token") || "";
+
+    if (!token) {
+      setView(html`
+        ${raw(pageHeader("Reset link expired", "That link is missing the reset token."))}
+        <div class="redeem-card">
+          <p><a href="/forgot-password" data-route>Request a new link.</a></p>
+        </div>
+      `);
+      return;
+    }
+
+    setView(html`
+      ${raw(pageHeader("Choose a new password", "Set the password you'll use to sign in."))}
+
+      <div class="redeem-card" id="reset-step">
+        <label for="reset-password">New password (8+ characters)</label>
+        <input type="password" id="reset-password" minlength="8" autocomplete="new-password" required />
+
+        <label for="reset-password2">Confirm new password</label>
+        <input type="password" id="reset-password2" minlength="8" autocomplete="new-password" required />
+
+        <div id="reset-totp-row" hidden>
+          <label for="reset-totp">Two-factor code (or backup code)</label>
+          <input type="text" id="reset-totp" autocomplete="off" />
+          <p class="muted">2FA is on for this account — enter the 6-digit code from your authenticator app, or one of your backup codes.</p>
+        </div>
+
+        <button class="primary" type="button" id="reset-submit" data-token="${token}">Set new password</button>
+        <p class="signin-error" id="reset-error" hidden></p>
+      </div>
+    `);
+  }
+
+  async function doResetSubmit() {
+    const errEl = $("reset-error");
+    if (errEl) errEl.hidden = true;
+    const submit = $("reset-submit");
+    if (submit) { submit.disabled = true; submit.textContent = "Saving…"; }
+
+    function fail(msg) {
+      if (errEl) { errEl.textContent = msg; errEl.hidden = false; }
+      if (submit) { submit.disabled = false; submit.textContent = "Set new password"; }
+    }
+
+    const token = submit && submit.getAttribute("data-token");
+    const pw1 = $("reset-password").value;
+    const pw2 = $("reset-password2").value;
+    const totp = $("reset-totp") && $("reset-totp").value.trim();
+
+    if (pw1 !== pw2) return fail("Passwords don't match.");
+    if (pw1.length < 8) return fail("Password must be at least 8 characters.");
+
+    const payload = { token, new_password: pw1 };
+    if (totp) payload.totp_code = totp;
+
+    const { status, body } = await apiFetch("/auth/web/password/reset", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+
+    if (status === 200 && body && body.ok) {
+      setView(html`
+        ${raw(pageHeader("Password updated", "You can sign in with your new password."))}
+        <div class="redeem-card">
+          <p>All set. <a href="/" data-route>Back to the dashboard.</a></p>
+        </div>
+      `);
+      return;
+    }
+
+    const reason = (body && body.error) || "";
+    if (reason === "totp_required") {
+      const row = $("reset-totp-row");
+      if (row) row.hidden = false;
+      return fail("Enter your two-factor code below.");
+    }
+    if (reason === "invalid_totp_code") return fail("That two-factor code didn't match.");
+    if (reason === "weak_password") return fail("Password too short.");
+    if (reason === "expired") return fail("That reset link has expired. Request a new one.");
+    if (reason === "consumed" || reason === "invalid_token") return fail("That reset link is no longer valid.");
+    fail("Couldn't reset the password. Try again.");
+  }
+
+  function renderSetupTotp() {
+    setView(html`
+      ${raw(pageHeader("Set up two-factor authentication", "Required to keep your account safe. Takes about 30 seconds."))}
+
+      <div class="redeem-card" id="setup2fa-step">
+        <p>Open an authenticator app (Google Authenticator, 1Password, Authy, …)
+        and either scan the QR or paste the secret.</p>
+
+        <div id="setup2fa-qr" style="margin: 1rem 0; min-height: 200px;"></div>
+
+        <label class="muted-label">Secret (manual entry)</label>
+        <pre class="muted" id="setup2fa-secret" style="word-break: break-all; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px;"></pre>
+
+        <label for="totp-code">6-digit code from your app</label>
+        <input type="text" id="totp-code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6"
+               autocomplete="one-time-code" autocorrect="off" />
+
+        <button class="primary" type="button" id="totp-confirm">Confirm + enable</button>
+        <p class="signin-error" id="totp-error" hidden></p>
+      </div>
+    `);
+
+    bootSetupTotp();
+  }
+
+  async function bootSetupTotp() {
+    const { status, body } = await apiFetch("/api/v1/account/totp/setup", {
+      method: "POST",
+      body: "{}",
+    });
+
+    if (status !== 200 || !body || !body.ok) {
+      const errEl = $("totp-error");
+      if (errEl) {
+        errEl.textContent = (body && body.error === "already_enrolled")
+          ? "Two-factor is already set up on this account."
+          : "Couldn't start 2FA setup. Try again.";
+        errEl.hidden = false;
+      }
+      return;
+    }
+
+    const secret = $("setup2fa-secret");
+    if (secret) secret.textContent = body.secret_b32;
+
+    const qrTarget = $("setup2fa-qr");
+    if (qrTarget) {
+      try {
+        const mod = await import("/vendor/qr.js");
+        qrTarget.innerHTML = mod.svg(body.otpauth_uri);
+      } catch (_) {
+        qrTarget.innerHTML = `<a href="${body.otpauth_uri}">Tap to open in auth app</a>`;
+      }
+    }
+
+    const btn = $("totp-confirm");
+    if (btn) btn.setAttribute("data-secret", body.secret);
+  }
+
+  async function doConfirmTotp() {
+    const errEl = $("totp-error");
+    if (errEl) errEl.hidden = true;
+    const btn = $("totp-confirm");
+    if (btn) { btn.disabled = true; btn.textContent = "Confirming…"; }
+
+    const secret = btn && btn.getAttribute("data-secret");
+    const code = ($("totp-code") && $("totp-code").value || "").trim();
+
+    function fail(msg) {
+      if (errEl) { errEl.textContent = msg; errEl.hidden = false; }
+      if (btn) { btn.disabled = false; btn.textContent = "Confirm + enable"; }
+    }
+
+    if (!/^\d{6}$/.test(code)) return fail("Enter the 6-digit code from your auth app.");
+
+    const { status, body } = await apiFetch("/api/v1/account/totp/enroll", {
+      method: "POST",
+      body: JSON.stringify({ secret, code }),
+    });
+
+    if (status === 200 && body && body.ok && Array.isArray(body.backup_codes)) {
+      renderBackupCodes(body.backup_codes);
+      return;
+    }
+
+    if (body && body.error === "invalid_code") return fail("That code didn't match. Check the time on your device and try again.");
+    fail("Couldn't enroll. Try again.");
+  }
+
+  function renderBackupCodes(codes) {
+    setView(html`
+      ${raw(pageHeader("Save your backup codes", "Each code is single-use and lets you sign in if you lose your auth app."))}
+
+      <div class="redeem-card">
+        <ol class="backup-list" style="font-family: monospace; line-height: 1.8; columns: 2; padding-left: 1.5rem;">
+          ${raw(codes.map((c) => `<li>${escape(c)}</li>`).join(""))}
+        </ol>
+        <p class="muted">Print, screenshot, or save these somewhere offline. We won't show them again.</p>
+        <button class="primary" type="button" id="backup-confirm">I've saved them</button>
+      </div>
+    `);
+  }
+
+  // ── Phase J5b — Move-your-Squad ────────────────────────────────
+
+  function renderMoveSquad() {
+    setView(html`
+      ${raw(pageHeader("Move your Squad", "Pick a pack — one code activates your year of Core, the rest are yours to give away."))}
+
+      <div class="plan-grid">
+        <div class="plan-card pack-pick" data-squad-pack="5">
+          <div class="plan-head">
+            <h2>5-pack</h2>
+            <div class="plan-price">$50<span> one-time</span></div>
+          </div>
+          <p class="plan-sub">$10 / code · 4 invites to give away.</p>
+        </div>
+        <div class="plan-card plan-card-pro pack-pick" data-squad-pack="10">
+          <div class="plan-head">
+            <h2>10-pack</h2>
+            <div class="plan-price">$80<span> one-time</span></div>
+          </div>
+          <p class="plan-sub">$8 / code · 9 invites to give away.</p>
+        </div>
+      </div>
+
+      <p class="muted">
+        We'll redirect you to Stripe to pay. After checkout, your year of
+        Core activates and the remaining codes show up on
+        <a href="/gift/orders" data-route>past orders</a>.
+      </p>
+      <p class="signin-error" id="move-squad-error" hidden></p>
+    `);
+  }
+
+  async function doMoveSquadCheckout(packSize) {
+    const errEl = $("move-squad-error");
+    if (errEl) errEl.hidden = true;
+
+    const { status, body } = await apiFetch("/billing/gifts/purchase-self-redeem", {
+      method: "POST",
+      body: JSON.stringify({ pack_size: packSize }),
+    });
+
+    if (status === 200 && body && body.checkout_url) {
+      window.location.href = body.checkout_url;
+      return;
+    }
+
+    if (errEl) {
+      errEl.textContent =
+        (body && body.error === "stripe_unreachable")
+          ? "Stripe is unreachable — try again in a moment."
+          : "Couldn't start checkout. Try again.";
+      errEl.hidden = false;
+    }
+  }
+
+  // ── TOTP modal for sign-in challenge + step-up step ─────────────
+
+  let pendingTotp = null;
+
+  function showTotpModal({ title, description, onSubmit }) {
+    pendingTotp = { onSubmit };
+
+    let modal = document.getElementById("totp-modal");
+    if (!modal) {
+      modal = document.createElement("dialog");
+      modal.id = "totp-modal";
+      modal.className = "signin-dialog totp-modal";
+      modal.innerHTML = `
+        <form method="dialog">
+          <header>
+            <h3 id="totp-modal-title"></h3>
+          </header>
+          <p id="totp-modal-desc"></p>
+          <label for="totp-modal-input">6-digit code</label>
+          <input id="totp-modal-input" type="text" inputmode="numeric" pattern="[0-9]{6}"
+                 maxlength="20" autocomplete="one-time-code" autocorrect="off" />
+          <p class="signin-error" id="totp-modal-error" hidden></p>
+          <div class="signin-actions">
+            <button type="button" class="ghost" id="totp-modal-cancel">Cancel</button>
+            <button type="button" class="primary" id="totp-modal-submit">Verify</button>
+          </div>
+        </form>
+      `;
+      document.body.appendChild(modal);
+
+      $("totp-modal-cancel").addEventListener("click", () => modal.close());
+      $("totp-modal-submit").addEventListener("click", async () => {
+        const code = ($("totp-modal-input").value || "").trim();
+        if (pendingTotp && pendingTotp.onSubmit) {
+          const ok = await pendingTotp.onSubmit(code);
+          if (ok) modal.close();
+          else {
+            const e = $("totp-modal-error");
+            if (e) { e.textContent = "Code didn't match. Try again."; e.hidden = false; }
+          }
+        }
+      });
+    }
+
+    $("totp-modal-title").textContent = title;
+    $("totp-modal-desc").textContent = description;
+    $("totp-modal-input").value = "";
+    const errEl = $("totp-modal-error");
+    if (errEl) errEl.hidden = true;
+    modal.showModal();
+  }
+
+  // Sign-in second leg: exchange `challenge_token` + 6-digit code
+  // (or backup code) for a session cookie, then complete login.
+  async function promptTotpForLogin(challengeToken) {
+    return new Promise((resolve) => {
+      showTotpModal({
+        title: "Two-factor required",
+        description: "Enter the 6-digit code from your authenticator app, or one of your backup codes.",
+        onSubmit: async (code) => {
+          const { status, body } = await _origApiFetch("/auth/web/login/totp", {
+            method: "POST",
+            body: JSON.stringify({ challenge_token: challengeToken, code }),
+          });
+          if (status === 200 && body && body.ok) {
+            state.csrfToken = body.csrf_token;
+            state.user = body.user;
+            // Close any open sign-in dialog.
+            try { document.getElementById("signin-dialog")?.close(); } catch {}
+            await onSignedIn();
+            resolve(true);
+            return true;
+          }
+          return false;
+        },
+      });
+    });
+  }
+
+  // Handle 403 totp_required by prompting the user + retrying.
+  // Used by /api/v1/account/email/change, /totp/disable,
+  // /totp/backup-codes/regenerate.
+  async function stepUpTotpAndRetry(originalReq) {
+    return new Promise((resolve) => {
+      showTotpModal({
+        title: "Two-factor required",
+        description: "Enter your 6-digit auth-app code (or a backup code) to continue.",
+        onSubmit: async (code) => {
+          const verify = await apiFetch("/api/v1/account/totp/verify", {
+            method: "POST",
+            body: JSON.stringify({ code }),
+          });
+          if (verify.status === 200) {
+            const retried = await originalReq();
+            resolve(retried);
+            return true;
+          }
+          return false;
+        },
+      });
+    });
+  }
+
+  // Wrap apiFetch so callers don't need to know about the
+  // step-up dance. Replace the original apiFetch behavior.
+  const _origApiFetch = apiFetch;
+  apiFetch = async function (path, opts) {
+    const result = await _origApiFetch(path, opts);
+    if (result.status === 403 && result.body && result.body.error === "totp_required") {
+      return stepUpTotpAndRetry(() => _origApiFetch(path, opts));
+    }
+    return result;
+  };
+
+  // ── Click delegation for new pages ─────────────────────────────
+
+  document.body.addEventListener("click", (e) => {
+    if (e.target.closest("#register-submit")) {
+      e.preventDefault();
+      doRegisterSubmit();
+    }
+    if (e.target.closest("#forgot-submit")) {
+      e.preventDefault();
+      doForgotSubmit();
+    }
+    if (e.target.closest("#reset-submit")) {
+      e.preventDefault();
+      doResetSubmit();
+    }
+    if (e.target.closest("#totp-confirm")) {
+      e.preventDefault();
+      doConfirmTotp();
+    }
+    if (e.target.closest("#backup-confirm")) {
+      e.preventDefault();
+      navigate("/welcome");
+    }
+    if (e.target.closest("#welcome-pay")) navigate("/subscription");
+    if (e.target.closest("#welcome-redeem")) navigate("/redeem");
+    if (e.target.closest("#welcome-squad")) navigate("/move-squad");
+    if (e.target.closest("[data-squad-pack]")) {
+      const size = parseInt(e.target.closest("[data-squad-pack]").getAttribute("data-squad-pack"), 10);
+      doMoveSquadCheckout(size);
+    }
+  });
+
+  // Helper: HTML-escape (not exposed by the existing helpers).
+  function escape(v) {
+    return String(v)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
 
   loadCurrentUser();
 })();
