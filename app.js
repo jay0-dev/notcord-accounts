@@ -2009,6 +2009,9 @@
     const { status, body } = await apiFetch("/auth/web/me");
     if (status === 200 && body && body.ok) {
       state.user = body.user;
+      // Phase J — backend reissues a CSRF token on /me so the SPA
+      // can recover its in-memory token after a page reload.
+      if (body.csrf_token) state.csrfToken = body.csrf_token;
       await onSignedIn();
     } else {
       onSignedOut();
