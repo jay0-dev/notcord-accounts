@@ -1084,8 +1084,19 @@ dialog.signin-dialog textarea:focus {
   color: var(--text);
   border-radius: 6px;
   padding: 10px 12px;
-  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-family: inherit;
   font-size: 14px;
+}
+
+/* Gift-code field is the only input that wants the uppercase
+   monospace look — codes are XXXX-XXXX-XXXX-XXXX. Other
+   `.redeem-card input` instances (register, forgot, reset,
+   pack-at-signup, setup-2fa) need plain rendering so typed
+   text isn't visually mangled. */
+.redeem-card input#redeem-code,
+.redeem-card input#totp-code,
+.redeem-card input#reset-totp {
+  font-family: "SF Mono", Menlo, Consolas, monospace;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -1115,9 +1126,7 @@ dialog.signin-dialog textarea:focus {
 }
 
 .redeem-card label {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
+  font-size: 13px;
   color: var(--muted);
 }
 
@@ -1177,10 +1186,8 @@ dialog.signin-dialog form > header {
 
 dialog.signin-dialog h3 {
   margin: 0;
-  font-size: 15px;
+  font-size: 18px;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 1.2px;
 }
 
 dialog.signin-dialog .dialog-close {
@@ -1199,9 +1206,7 @@ dialog.signin-dialog .dialog-close:hover {
 
 dialog.signin-dialog label {
   display: block;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
+  font-size: 13px;
   color: var(--muted);
   margin: 12px 0 6px;
 }

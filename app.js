@@ -389,7 +389,15 @@
 
   async function renderSubscription() {
     const body = state.summary || (await refreshSummary());
-    const current = body && body.plan;
+    // `body.plan` is "core" / "pro" mirrored from the most recent
+    // Stripe webhook — but it's set on register too (status starts
+    // at "unsubscribed" with plan="core" pre-populated so the row
+    // is queryable). Only treat the plan as the user's "current"
+    // when the subscription is entitled — otherwise Core shows as
+    // "Current plan" with the checkout button disabled, blocking
+    // the user from ever paying.
+    const entitled = body && (body.status === "active" || body.status === "trialing");
+    const current = entitled ? body.plan : null;
 
     setView(html`
       ${raw(
@@ -2222,9 +2230,6 @@
         <label for="reg-email">Email</label>
         <input type="email" id="reg-email" autocomplete="email" required />
 
-        <label for="reg-display">Display name (optional)</label>
-        <input type="text" id="reg-display" />
-
         <label for="reg-password">Password (8+ characters)</label>
         <input type="password" id="reg-password" minlength="8" autocomplete="new-password" required />
 
@@ -2250,7 +2255,6 @@
 
     const username = $("reg-username").value.trim();
     const email = $("reg-email").value.trim();
-    const display = $("reg-display").value.trim();
     const password = $("reg-password").value;
     const password2 = $("reg-password2").value;
 
@@ -2276,7 +2280,6 @@
         username,
         email,
         password,
-        display_name: display || null,
         identity_key: keys.identity_key_b64,
         mlkem_ek: keys.mlkem_ek_b64,
       }),
