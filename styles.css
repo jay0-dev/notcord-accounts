@@ -1,17 +1,23 @@
 /* Hexis Accounts — dark, industrial, matches the Hexis admin console palette. */
 
 :root {
-  --bg: #0f1115;
-  --panel: #171a21;
-  --panel-2: #1e222b;
-  --border: #262a35;
-  --text: #e6e6e6;
-  --muted: #8a93a6;
-  --accent: #f5c116;
-  --accent-dim: rgba(245, 193, 22, 0.2);
-  --success: #3ccf91;
-  --danger: #ff5a5f;
-  --warn: #f5a623;
+  --bg:        #0c0e13;
+  --panel:     #14171f;     /* base panel — sidebar, topbar */
+  --panel-2:   #1a1e28;     /* raised panel — cards, dialogs */
+  --panel-3:   #20242f;     /* highest layer — input fields */
+  --border:    #262a35;
+  --border-strong: #2f3441;
+  --text:      #e6e6e6;
+  --muted:     #8a93a6;
+  --accent:    #f5c116;
+  --accent-dim: rgba(245, 193, 22, 0.18);
+  --success:   #3ccf91;
+  --danger:    #ff5a5f;
+  --warn:      #f5a623;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.32), 0 2px 4px rgba(0, 0, 0, 0.2);
+  --radius:    12px;
+  --radius-sm: 8px;
 }
 
 * {
@@ -46,9 +52,13 @@ a:hover {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 32px;
+  padding: 14px 32px;
   border-bottom: 1px solid var(--border);
   background: var(--panel);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  backdrop-filter: saturate(160%) blur(8px);
 }
 
 .brand {
@@ -92,12 +102,19 @@ a:hover {
 .primary {
   font-family: inherit;
   font-size: 13px;
-  padding: 8px 14px;
-  border-radius: 6px;
+  padding: 9px 16px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--muted);
+  border: 1px solid var(--border-strong);
+  background: var(--panel-2);
+  color: var(--text);
+  font-weight: 500;
+  transition: border-color 120ms ease, background 120ms ease, color 120ms ease, transform 80ms ease;
+}
+
+.ghost:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .primary {
@@ -105,16 +122,29 @@ a:hover {
   color: #1a1a1a;
   border-color: var(--accent);
   font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+.primary:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+.primary:active:not(:disabled),
+.ghost:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 .primary:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
-.ghost:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+/* Larger CTA size for hero buttons. */
+.lg {
+  padding: 12px 22px;
+  font-size: 15px;
+  border-radius: var(--radius-sm);
 }
 
 /* ── Layout ─────────────────────────────────────────────────────── */
@@ -125,18 +155,59 @@ a:hover {
   padding: 48px 32px;
 }
 
+.landing-container {
+  max-width: 720px;
+  padding: 96px 32px 64px;
+  text-align: center;
+}
+
+.hero-eyebrow {
+  display: inline-block;
+  margin-bottom: 16px;
+  padding: 4px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.4px;
+  font-weight: 600;
+}
+
 .hero h1 {
-  margin: 0 0 8px;
-  font-size: 32px;
+  margin: 0 0 14px;
+  font-size: 40px;
   font-weight: 800;
-  letter-spacing: -0.5px;
+  letter-spacing: -0.6px;
+  line-height: 1.15;
 }
 
 .hero .lede {
   color: var(--muted);
   font-size: 16px;
   max-width: 580px;
-  margin: 0 0 32px;
+  margin: 0 auto 32px;
+}
+
+.landing-container .hero .lede {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.hero-actions .ghost,
+.hero-actions .primary {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* ── Cards ─────────────────────────────────────────────────────── */
@@ -149,15 +220,18 @@ a:hover {
 }
 
 .card {
-  background: var(--panel);
+  background: var(--panel-2);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 20px;
-  transition: border-color 120ms ease;
+  border-radius: var(--radius);
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
 }
 
 .card:hover {
-  border-color: var(--accent-dim);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
 }
 
 .card header {
@@ -252,12 +326,20 @@ footer .dot {
 
 .shell {
   display: grid;
-  grid-template-columns: 220px 1fr;
-  max-width: 1200px;
+  grid-template-columns: 232px 1fr;
+  max-width: 1240px;
   margin: 0 auto;
-  padding: 32px 24px 48px;
-  gap: 24px;
+  padding: 40px 32px 64px;
+  gap: 32px;
   min-height: calc(100vh - 120px);
+}
+
+/* Public routes (register / forgot / reset / redeem) for signed-
+   out users: collapse to single column so the sidebar isn't
+   showing a list of nav links the user can't actually use yet. */
+.shell.shell-no-sidebar {
+  grid-template-columns: 1fr;
+  max-width: 720px;
 }
 
 .sidebar nav {
@@ -266,10 +348,11 @@ footer .dot {
   gap: 2px;
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 8px;
+  border-radius: var(--radius);
+  padding: 10px;
   position: sticky;
-  top: 24px;
+  top: 88px;
+  box-shadow: var(--shadow-sm);
 }
 
 /* Same `[hidden]`-vs-`display:flex` problem as `.signed-in` —
@@ -282,22 +365,22 @@ footer .dot {
 .nav-link {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: 10px;
+  padding: 9px 12px;
   color: var(--muted);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 13px;
   font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
+  text-transform: none;
+  letter-spacing: 0;
   border: 1px solid transparent;
   transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
 }
 
 .nav-link:hover {
-  color: var(--accent);
+  color: var(--text);
   text-decoration: none;
-  background: rgba(245, 193, 22, 0.06);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .nav-link.active {
@@ -314,19 +397,18 @@ footer .dot {
 }
 
 .nav-link-sub {
-  padding-left: 22px;
+  padding-left: 30px;
   font-size: 12px;
-  text-transform: none;
-  letter-spacing: 0;
 }
 
 .nav-section-label {
-  margin: 18px 8px 6px;
+  margin: 16px 12px 6px;
   font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 1.2px;
   color: var(--muted);
-  opacity: 0.7;
+  opacity: 0.6;
+  font-weight: 600;
 }
 
 .view {
@@ -334,12 +416,14 @@ footer .dot {
 }
 
 .page-header {
-  margin-bottom: 24px;
+  margin-bottom: 32px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
 }
 
 .page-header h1 {
-  margin: 0 0 6px;
-  font-size: 26px;
+  margin: 0 0 8px;
+  font-size: 28px;
   font-weight: 800;
   letter-spacing: -0.3px;
 }
@@ -348,35 +432,44 @@ footer .dot {
   margin: 0;
   color: var(--muted);
   font-size: 14px;
+  max-width: 720px;
 }
 
 /* ── Overview ───────────────────────────────────────────────────── */
 
 .overview-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 14px;
-  margin-bottom: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
 }
 
 .stat {
-  background: var(--panel);
+  background: var(--panel-2);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 16px 18px;
+  border-radius: var(--radius);
+  padding: 20px 22px;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 150ms ease;
+}
+
+.stat:hover {
+  border-color: var(--border-strong);
 }
 
 .stat-label {
   font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 1.2px;
   color: var(--muted);
+  font-weight: 600;
 }
 
 .stat-value {
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 700;
-  margin: 4px 0 2px;
+  margin: 8px 0 4px;
+  letter-spacing: -0.5px;
 }
 
 .stat-sub {
@@ -388,8 +481,8 @@ footer .dot {
   background: var(--panel-2);
   border: 1px solid var(--border);
   border-left: 3px solid var(--accent);
-  border-radius: 6px;
-  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  padding: 14px 18px;
   font-size: 13px;
   color: var(--muted);
 }
@@ -398,19 +491,27 @@ footer .dot {
 
 .plan-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 16px;
-  margin-bottom: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  margin-bottom: 24px;
 }
 
 .plan-card {
-  background: var(--panel);
+  background: var(--panel-2);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 20px;
+  border-radius: var(--radius);
+  padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+}
+
+.plan-card:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 
 .plan-card-pro {
@@ -419,7 +520,7 @@ footer .dot {
 
 .plan-card-active {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-dim);
+  box-shadow: 0 0 0 2px var(--accent-dim), var(--shadow-sm);
 }
 
 .plan-head h2 {
@@ -470,44 +571,69 @@ footer .dot {
 .plan-card button {
   margin-top: auto;
   font-family: inherit;
-  font-size: 13px;
-  padding: 10px 14px;
-  border-radius: 6px;
+  font-size: 14px;
+  padding: 11px 16px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   background: var(--accent);
   color: #1a1a1a;
   border: 1px solid var(--accent);
   font-weight: 600;
+  box-shadow: var(--shadow-sm);
+  transition: filter 120ms ease, transform 80ms ease;
+}
+
+.plan-card button:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+.plan-card button:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 .plan-card button[disabled] {
   opacity: 0.45;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
-/* ── Generic "coming soon" card ─────────────────────────────────── */
+/* ── Generic info card (used by placeholderCard + empty states) ── */
 
+.info-card,
 .soon-card {
-  background: var(--panel);
+  background: var(--panel-2);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 18px 20px;
+  border-radius: var(--radius);
+  padding: 22px 24px;
   margin-bottom: 16px;
+  box-shadow: var(--shadow-sm);
 }
 
+.info-card-head,
 .soon-card-head {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
+.info-card-head h2,
 .soon-card-head h2 {
   margin: 0;
   font-size: 14px;
   text-transform: uppercase;
   letter-spacing: 1.2px;
   flex: 1;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.info-card p,
+.soon-card p {
+  color: var(--muted);
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .soon-card p {
@@ -1094,24 +1220,26 @@ dialog.signin-dialog textarea:focus {
 /* ── Redeem card ────────────────────────────────────────────────── */
 
 .redeem-card {
-  background: var(--panel);
+  background: var(--panel-2);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 20px;
+  border-radius: var(--radius);
+  padding: 28px;
   max-width: 520px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+  box-shadow: var(--shadow-sm);
 }
 
 .redeem-card input {
-  background: var(--panel-2);
-  border: 1px solid var(--border);
+  background: var(--panel-3);
+  border: 1px solid var(--border-strong);
   color: var(--text);
-  border-radius: 6px;
-  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  padding: 11px 14px;
   font-family: inherit;
   font-size: 14px;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 
 /* Gift-code field is the only input that wants the uppercase
@@ -1136,19 +1264,31 @@ dialog.signin-dialog textarea:focus {
 .redeem-card button {
   align-self: flex-start;
   font-family: inherit;
-  font-size: 13px;
-  padding: 10px 18px;
-  border-radius: 6px;
+  font-size: 14px;
+  padding: 11px 20px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   background: var(--accent);
   color: #1a1a1a;
   border: 1px solid var(--accent);
   font-weight: 600;
+  box-shadow: var(--shadow-sm);
+  transition: filter 120ms ease, transform 80ms ease;
+  margin-top: 6px;
+}
+
+.redeem-card button:hover:not([disabled]) {
+  filter: brightness(1.05);
+}
+
+.redeem-card button:active:not([disabled]) {
+  transform: translateY(1px);
 }
 
 .redeem-card button[disabled] {
   opacity: 0.45;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 .redeem-card label {

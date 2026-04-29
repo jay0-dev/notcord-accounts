@@ -71,71 +71,19 @@
     </form>
   </dialog>
 
-  <!-- Signed-out landing: hero + cards describing what lives here. -->
-  <main class="container" id="landing" hidden>
+  <!-- Signed-out landing: clean hero, sign-in + create-account CTAs. -->
+  <main class="container landing-container" id="landing" hidden>
     <section class="hero">
-      <h1>Account &amp; billing</h1>
+      <span class="hero-eyebrow">Account &amp; billing</span>
+      <h1>Manage your Hexis account</h1>
       <p class="lede">
-        Manage your subscription, view invoices, and provision API keys and
-        bots from one place.
+        Subscriptions, billing, API keys, bots, and gift codes — all in
+        one place. Sign in with your Hexis account, or create a new one.
       </p>
-      <p>
-        <button class="primary" type="button" data-landing-signin>Sign in to continue</button>
-      </p>
-    </section>
-
-    <section class="grid">
-      <article class="card">
-        <header>
-          <span class="card-icon">●</span>
-          <h2>Subscription</h2>
-          <span class="badge soon">soon</span>
-        </header>
-        <p>
-          Pick a plan, upgrade or downgrade, and see what's included.
-          Hexis Core covers the essentials; Pro unlocks higher voice
-          quality, larger attachments, the full emoji / GIF suite, and
-          the Pro badge.
-        </p>
-      </article>
-
-      <article class="card">
-        <header>
-          <span class="card-icon">●</span>
-          <h2>Billing</h2>
-          <span class="badge soon">soon</span>
-        </header>
-        <p>
-          Update payment method, download invoices, and review
-          recent charges. Payments are handled through Stripe.
-        </p>
-      </article>
-
-      <article class="card">
-        <header>
-          <span class="card-icon">●</span>
-          <h2>API keys</h2>
-          <span class="badge soon">soon</span>
-        </header>
-        <p>
-          Create scoped, revocable API keys for personal automation
-          and CI integrations. Keys carry a subset of your account's
-          permissions and can be rotated at any time.
-        </p>
-      </article>
-
-      <article class="card">
-        <header>
-          <span class="card-icon">●</span>
-          <h2>Bots</h2>
-          <span class="badge soon">soon</span>
-        </header>
-        <p>
-          Register OAuth 2.1 bot applications, manage redirect URIs,
-          and review which servers have authorized them. PKCE flow
-          required for all third-party clients.
-        </p>
-      </article>
+      <div class="hero-actions">
+        <button class="primary lg" type="button" data-landing-signin>Sign in</button>
+        <a class="ghost lg" href="/register" data-route>Create an account</a>
+      </div>
     </section>
   </main>
 

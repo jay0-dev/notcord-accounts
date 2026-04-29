@@ -220,14 +220,27 @@
     const path = location.pathname;
     const route = matchRoute(path);
 
-    // Public routes (currently just /redeem) ignore auth state.
+    // Public routes ignore auth state.
     if (route && !route.auth) {
       landing.hidden = true;
       shell.hidden = false;
+      // For signed-out users, the dashboard sidebar is useless —
+      // every nav item there leads to an auth-required page.
+      // Hide it so /register, /forgot-password, /reset-password,
+      // /redeem and /verify-email/done render with a clean
+      // single-column layout.
+      const sidebar = document.querySelector("aside.sidebar");
+      if (sidebar) sidebar.hidden = !state.user;
+      shell.classList.toggle("shell-no-sidebar", !state.user);
       markActiveNav(path);
       route.render();
       return;
     }
+
+    // Restore the sidebar visibility for non-public routes.
+    const sidebar = document.querySelector("aside.sidebar");
+    if (sidebar) sidebar.hidden = false;
+    shell.classList.remove("shell-no-sidebar");
 
     // Signed out → always show the landing, regardless of path.
     // When the user signs in we'll re-route to the originally
@@ -293,10 +306,9 @@
 
   function placeholderCard(heading, body) {
     return html`
-      <div class="soon-card">
-        <div class="soon-card-head">
+      <div class="info-card">
+        <div class="info-card-head">
           <h2>${heading}</h2>
-          <span class="badge soon">soon</span>
         </div>
         <p>${body}</p>
       </div>
