@@ -303,10 +303,21 @@
     const { status, body } = await apiFetch("/api/v1/account/summary");
     if (status === 200 && body && body.ok) {
       state.summary = body;
+      applyNavVisibility(body);
       return body;
     }
     state.summary = null;
     return null;
+  }
+
+  // Hide the "Redeem a gift code" sidebar entry once the user has
+  // either subscribed (or had a subscription in the past) or
+  // already redeemed a code — the /redeem flow itself is for
+  // fresh accounts only and the link would just confuse them.
+  function applyNavVisibility(summary) {
+    const link = document.querySelector('aside.sidebar a[href="/redeem"]');
+    if (!link) return;
+    link.hidden = !(summary && summary.gift_redemption_eligible);
   }
 
   function planLabel(plan) {
@@ -314,14 +325,20 @@
     return plan.charAt(0).toUpperCase() + plan.slice(1);
   }
 
-  // Render the "Choose / Switch / Current" button for one plan
+  // Render the "Choose / Upgrade / Current" button for one plan
   // card. `target` is the tile this button lives in (core/pro);
   // `current` is the user's active plan ("core"|"pro"|null).
-  // - No active plan → "Choose X" → /billing/checkout (Stripe).
-  // - Active plan, this is current → "Current plan" disabled.
-  // - Active plan, this is the OTHER tier → "Switch to X" →
-  //   /billing/switch (Stripe Customer Portal with subscription
-  //   update flow_data; Stripe handles proration both ways).
+  //
+  // - No active plan: "Choose X" → /billing/checkout (Stripe).
+  // - Active plan = this tile: "Current plan" disabled.
+  // - Active Core, looking at Pro tile: "Upgrade to Pro" →
+  //   /billing/switch (Customer Portal with proration).
+  // - Active Pro, looking at Core tile: NO downgrade button.
+  //   Pro is one-way; the user has to cancel via the Customer
+  //   Portal and resubscribe to Core if they really want to
+  //   step down. Surfacing this as a button would invite users
+  //   to think it's a one-click downgrade — it isn't, Stripe
+  //   would still hold them on Pro until period end.
   function planButton(target, current) {
     if (!current) {
       return `<button class="primary" type="button" data-checkout="${target}">Choose ${planLabel(target)}</button>`;
@@ -329,7 +346,11 @@
     if (current === target) {
       return `<button class="primary" type="button" disabled>Current plan</button>`;
     }
-    return `<button class="primary" type="button" data-switch="${target}">Switch to ${planLabel(target)}</button>`;
+    if (current === "core" && target === "pro") {
+      return `<button class="primary" type="button" data-switch="pro">Upgrade to Pro</button>`;
+    }
+    // current === "pro", target === "core" → no button.
+    return `<p class="muted" style="margin: 0; font-size: 13px;">Pro members stay on Pro for the year. Cancel from <a href="/billing" data-route>Billing</a> if you want to step down at renewal.</p>`;
   }
 
   function statusLabel(status) {
