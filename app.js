@@ -1193,25 +1193,33 @@
     bundlePlan: "core",
   };
 
-  function renderGift() {
+  async function renderGift() {
     if (!state.user) {
       return renderGiftSignedOut();
     }
 
-    setView(html`
-      ${raw(pageHeader("Gift codes", "Buy a pack to onboard friends."))}
-      <div class="plan-grid">
-        ${raw(packPickerCardHtml(5, giftState.packs5))}
-        ${raw(packPickerCardHtml(10, giftState.packs10))}
-      </div>
+    // The "Also renew my own plan for another year" toggle only
+    // makes sense for users who haven't already started a Stripe
+    // subscription — once they have one, Stripe handles renewal
+    // automatically and bundling another year here would create
+    // a second subscription. Refresh summary so the check is
+    // current after a recent purchase.
+    const summary = state.summary || (await refreshSummary());
+    const hasActiveStripeSub = !!(summary && summary.current_period_end);
+    if (hasActiveStripeSub && giftState.bundle) {
+      giftState.bundle = false;
+    }
 
+    const bundleSection = hasActiveStripeSub
+      ? ""
+      : `
       <div class="bundle-toggle">
         <label class="scope-check">
           <input type="checkbox" id="gift-bundle" ${giftState.bundle ? "checked" : ""} />
           <span>Also renew my own plan for another year</span>
         </label>
         <div class="bundle-plan-picker" id="bundle-plan-picker" ${
-          giftState.bundle ? "" : 'hidden'
+          giftState.bundle ? "" : "hidden"
         }>
           <label class="scope-check">
             <input type="radio" name="bundle-plan" value="core" ${
@@ -1226,7 +1234,16 @@
             <span>Pro · $50/yr</span>
           </label>
         </div>
+      </div>`;
+
+    setView(html`
+      ${raw(pageHeader("Gift codes", "Buy a pack to onboard friends."))}
+      <div class="plan-grid">
+        ${raw(packPickerCardHtml(5, giftState.packs5))}
+        ${raw(packPickerCardHtml(10, giftState.packs10))}
       </div>
+
+      ${raw(bundleSection)}
 
       <div class="gift-summary">
         <div>
