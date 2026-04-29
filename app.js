@@ -314,6 +314,24 @@
     return plan.charAt(0).toUpperCase() + plan.slice(1);
   }
 
+  // Render the "Choose / Switch / Current" button for one plan
+  // card. `target` is the tile this button lives in (core/pro);
+  // `current` is the user's active plan ("core"|"pro"|null).
+  // - No active plan → "Choose X" → /billing/checkout (Stripe).
+  // - Active plan, this is current → "Current plan" disabled.
+  // - Active plan, this is the OTHER tier → "Switch to X" →
+  //   /billing/switch (Stripe Customer Portal with subscription
+  //   update flow_data; Stripe handles proration both ways).
+  function planButton(target, current) {
+    if (!current) {
+      return `<button class="primary" type="button" data-checkout="${target}">Choose ${planLabel(target)}</button>`;
+    }
+    if (current === target) {
+      return `<button class="primary" type="button" disabled>Current plan</button>`;
+    }
+    return `<button class="primary" type="button" data-switch="${target}">Switch to ${planLabel(target)}</button>`;
+  }
+
   function statusLabel(status) {
     if (!status || status === "unsubscribed") return "No subscription";
     return status.replace(/_/g, " ");
@@ -420,11 +438,7 @@
             <li>720p screen-share</li>
             <li>3 personal API keys</li>
           </ul>
-          <button class="primary" type="button" data-checkout="core" ${
-            current === "core" ? "disabled" : ""
-          }>
-            ${current === "core" ? "Current plan" : current ? "Switch to Core" : "Choose Core"}
-          </button>
+          ${raw(planButton("core", current))}
         </div>
 
         <div class="plan-card plan-card-pro ${current === "pro" ? "plan-card-active" : ""}">
@@ -439,17 +453,14 @@
             <li>25 personal API keys</li>
             <li>Hexis Pro badge</li>
           </ul>
-          <button class="primary" type="button" data-checkout="pro" ${
-            current === "pro" ? "disabled" : ""
-          }>
-            ${current === "pro" ? "Current plan" : current ? "Switch to Pro" : "Choose Pro"}
-          </button>
+          ${raw(planButton("pro", current))}
         </div>
       </div>
 
       <p class="muted">
-        Checkout opens Stripe. We never see your card — Hexis only
-        stores the subscription status mirrored back via webhook.
+        ${current
+          ? "Switching tier opens the Stripe Customer Portal. Stripe prorates upgrades (you pay the difference for the time remaining) and credits downgrades against your next renewal."
+          : "Checkout opens Stripe. We never see your card — Hexis only stores the subscription status mirrored back via webhook."}
       </p>
     `);
   }
@@ -546,6 +557,26 @@
       return;
     }
     alert("Couldn't start Stripe checkout. Please try again.");
+  }
+
+  async function doSwitch(plan) {
+    if (!state.csrfToken) {
+      alert("Please sign in again to continue.");
+      return;
+    }
+    const { status, body } = await apiFetch("/billing/switch", {
+      method: "POST",
+      body: JSON.stringify({ plan }),
+    });
+    if (status === 200 && body && body.portal_url) {
+      window.location.href = body.portal_url;
+      return;
+    }
+    if (body && body.error === "no_active_subscription") {
+      alert("Your subscription isn't active yet — refresh and try Choose " + planLabel(plan) + ".");
+      return;
+    }
+    alert("Couldn't open the Customer Portal. Please try again.");
   }
 
   async function doPortal() {
@@ -2081,6 +2112,17 @@
     e.preventDefault();
     const plan = btn.getAttribute("data-checkout");
     doCheckout(plan);
+  });
+
+  // Plan-switch buttons on /subscription (active subscriber
+  // changing tier — opens Stripe Customer Portal w/ subscription
+  // update pre-targeted, Stripe handles proration).
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-switch]");
+    if (!btn || btn.disabled) return;
+    e.preventDefault();
+    const plan = btn.getAttribute("data-switch");
+    doSwitch(plan);
   });
 
   // "Open Customer Portal" button on /billing.

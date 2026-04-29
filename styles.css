@@ -303,6 +303,15 @@ footer .dot {
   letter-spacing: 0;
 }
 
+.nav-section-label {
+  margin: 18px 8px 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--muted);
+  opacity: 0.7;
+}
+
 .view {
   min-width: 0;
 }
