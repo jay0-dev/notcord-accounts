@@ -1274,13 +1274,7 @@
           <label for="pack-password">Password</label>
           <input type="password" id="pack-password" required />
 
-          <label for="pack-display">Display name (optional)</label>
-          <input type="text" id="pack-display" />
-
-          <label for="pack-country">Country</label>
-          <select id="pack-country" required>
-            ${raw(countryOptionsHtml())}
-          </select>
+          ${raw(ageTosCheckboxHtml("pack"))}
 
           <button class="primary" type="button" id="pack-submit" disabled>Continue to Checkout</button>
           <p class="muted">
@@ -1328,15 +1322,14 @@
 
     const username = ($("pack-username") || {}).value || "";
     const password = ($("pack-password") || {}).value || "";
-    const display_name = ($("pack-display") || {}).value || "";
-    const country = ($("pack-country") || {}).value || "";
+    const ageOk = ($("pack-age") || {}).checked;
 
     if (!username || !password) {
       showPackError("Username + password are required.");
       return;
     }
-    if (!country) {
-      showPackError("Please pick your country.");
+    if (!ageOk) {
+      showPackError("You must confirm you're 18+ and agree to the terms.");
       return;
     }
 
@@ -1349,17 +1342,10 @@
       body: JSON.stringify({
         username,
         password,
-        display_name: display_name || null,
         identity_key,
-        country,
         pack_size: pickedPackSize,
       }),
     });
-
-    if (status === 202 && body && body.identity_required) {
-      window.location.href = body.verification_url;
-      return;
-    }
 
     if (status === 200 && body && body.checkout_url) {
       window.location.href = body.checkout_url;
@@ -1530,9 +1516,14 @@
   async function renderRedeem() {
     const params = new URLSearchParams(location.search);
     const prefill = params.get("code") || "";
+    const signedIn = !!state.user;
+
+    const heroLede = signedIn
+      ? "Apply a gift code to your account — adds a year of Core."
+      : "Create a new Hexis account with a year of Core prepaid.";
 
     setView(html`
-      ${raw(pageHeader("Redeem a gift code", "Create a new Hexis account with a year of Core prepaid."))}
+      ${raw(pageHeader("Redeem a gift code", heroLede))}
 
       <div class="redeem-card" id="redeem-step">
         <label for="redeem-code">Gift code</label>
@@ -1545,10 +1536,11 @@
           autocomplete="off"
           spellcheck="false"
         />
-        <button class="primary" type="button" id="redeem-check">Check code</button>
+        <button class="primary" type="button" id="redeem-check">${signedIn ? "Apply code" : "Check code"}</button>
         <p class="muted">
-          Gift codes work only when creating a new account — existing
-          accounts can't apply them.
+          ${signedIn
+            ? "We'll mark this code as redeemed and start your year of Core today."
+            : "Don't have an account yet? We'll create one for you in the next step."}
         </p>
         <p class="signin-error" id="redeem-error" hidden></p>
       </div>
@@ -1575,7 +1567,14 @@
     );
 
     if (status === 200 && body && body.ok) {
-      showRedeemSignupForm(code);
+      // Signed-in users have an account already — apply the code
+      // straight to it (Phase J follow-up). Signed-out users go
+      // through the create-account-with-this-code flow.
+      if (state.user) {
+        applyGiftCodeToCurrentAccount(code);
+      } else {
+        showRedeemSignupForm(code);
+      }
       return;
     }
 
@@ -1589,6 +1588,41 @@
         ? "This code is no longer valid. Ask the giver for a new one."
         : "We don't recognise that code.";
     showRedeemError(msg);
+  }
+
+  async function applyGiftCodeToCurrentAccount(code) {
+    const { status, body } = await apiFetch("/api/v1/billing/gifts/apply", {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    });
+
+    const root = $("redeem-step");
+
+    if (status === 200 && body && body.ok) {
+      state.summary = null;
+      await refreshSummary();
+      if (root) {
+        root.innerHTML = html`
+          <h3>Code applied</h3>
+          <p class="muted">Your year of Core is active. Check
+          <a href="/" data-route>Overview</a> for the renewal date.</p>
+        `;
+      }
+      return;
+    }
+
+    const reason = (body && body.error) || "unknown";
+    showRedeemError(
+      reason === "ineligible"
+        ? "This account isn't eligible for a code redemption (already redeemed or has a subscription)."
+        : reason === "redeemed"
+        ? "This code has already been redeemed."
+        : reason === "revoked"
+        ? "This code is no longer valid."
+        : reason === "expired"
+        ? "This code has expired."
+        : "Couldn't apply the code. Please try again."
+    );
   }
 
   function showRedeemError(msg) {
@@ -1620,18 +1654,7 @@
       <label for="redeem-password">Password</label>
       <input type="password" id="redeem-password" required />
 
-      <label for="redeem-display">Display name (optional)</label>
-      <input type="text" id="redeem-display" />
-
-      <label for="redeem-country">Country</label>
-      <select id="redeem-country" required>
-        ${raw(countryOptionsHtml())}
-      </select>
-      <p class="muted">
-        Some regions require a one-time identity check before
-        creating an account. We only keep a cryptographic hash —
-        not your documents.
-      </p>
+      ${raw(ageTosCheckboxHtml("redeem"))}
 
       <button class="primary" type="button" id="redeem-submit">Create account</button>
       <p class="muted">
@@ -1645,42 +1668,17 @@
     root.dataset.code = code;
   }
 
-  // Trim country list — most popular plus the Identity-required
-  // ones called out in the spec. Adding more here is operator
-  // copy work.
-  function countryOptionsHtml() {
-    const opts = [
-      ["", "Select…"],
-      ["US", "United States"],
-      ["CA", "Canada"],
-      ["MX", "Mexico"],
-      ["BR", "Brazil"],
-      ["AR", "Argentina"],
-      ["GB", "United Kingdom"],
-      ["IE", "Ireland"],
-      ["FR", "France"],
-      ["DE", "Germany"],
-      ["NL", "Netherlands"],
-      ["ES", "Spain"],
-      ["IT", "Italy"],
-      ["SE", "Sweden"],
-      ["NO", "Norway"],
-      ["DK", "Denmark"],
-      ["FI", "Finland"],
-      ["PL", "Poland"],
-      ["TR", "Turkey"],
-      ["AU", "Australia"],
-      ["NZ", "New Zealand"],
-      ["JP", "Japan"],
-      ["KR", "South Korea"],
-      ["IN", "India"],
-      ["SG", "Singapore"],
-      ["HK", "Hong Kong"],
-      ["ZA", "South Africa"],
-    ];
-    return opts
-      .map(([code, label]) => `<option value="${code}">${label}</option>`)
-      .join("");
+  // Self-attested age-and-terms checkbox. Each form that needs it
+  // gets its own DOM id (e.g. `redeem-age`, `pack-age`,
+  // `register-age`) so the form-specific submit handler can
+  // grab the right element.
+  function ageTosCheckboxHtml(prefix) {
+    return `
+      <label class="age-tos-row" style="display: flex; gap: 8px; align-items: flex-start; margin-top: 12px; font-size: 13px; cursor: pointer;">
+        <input type="checkbox" id="${prefix}-age" required style="margin-top: 3px;" />
+        <span>I am 18 years or older and agree to the
+          <a href="https://hexis.chat/terms" target="_blank" rel="noopener">Hexis terms of service</a>.</span>
+      </label>`;
   }
 
   async function doRedeemSubmit() {
@@ -1690,15 +1688,14 @@
     const code = root.dataset.code;
     const username = ($("redeem-username") || {}).value || "";
     const password = ($("redeem-password") || {}).value || "";
-    const display_name = ($("redeem-display") || {}).value || "";
-    const country = ($("redeem-country") || {}).value || "";
+    const ageOk = ($("redeem-age") || {}).checked;
 
     if (!username || !password) {
       showRedeemError("Username + password are required.");
       return;
     }
-    if (!country) {
-      showRedeemError("Please pick your country.");
+    if (!ageOk) {
+      showRedeemError("You must confirm you're 18+ and agree to the terms.");
       return;
     }
 
@@ -1712,18 +1709,9 @@
         gift_code: code,
         username,
         password,
-        display_name: display_name || null,
         identity_key,
-        country,
       }),
     });
-
-    // Phase I — Identity-gated regions get bounced through Stripe
-    // Identity before the user row is created.
-    if (status === 202 && body && body.identity_required) {
-      window.location.href = body.verification_url;
-      return;
-    }
 
     if (status === 201 && body && body.ok) {
       state.user = body.user;
@@ -2299,6 +2287,8 @@
         <label for="reg-password2">Confirm password</label>
         <input type="password" id="reg-password2" minlength="8" autocomplete="new-password" required />
 
+        ${raw(ageTosCheckboxHtml("register"))}
+
         <button class="primary" type="button" id="register-submit">Create account</button>
 
         <p class="muted">
@@ -2320,6 +2310,7 @@
     const email = $("reg-email").value.trim();
     const password = $("reg-password").value;
     const password2 = $("reg-password2").value;
+    const ageOk = ($("register-age") || {}).checked;
 
     function fail(msg) {
       if (errEl) { errEl.textContent = msg; errEl.hidden = false; }
@@ -2328,6 +2319,7 @@
 
     if (password !== password2) return fail("Passwords don't match.");
     if (password.length < 8) return fail("Password must be at least 8 characters.");
+    if (!ageOk) return fail("You must confirm you're 18+ and agree to the terms.");
 
     let keys;
     try {
