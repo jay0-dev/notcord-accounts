@@ -174,8 +174,12 @@
     state.csrfToken = null;
     state.user = null;
     state.summary = null;
+    // Flip the topbar chip back to "Sign in" — without this the
+    // "Signed in as <name>" + "Sign out" element stays in the
+    // a11y tree even though the rest of the dashboard rerenders
+    // to the landing.
+    onSignedOut();
     navigate("/", { replace: true });
-    render();
   }
 
   // ── Router ───────────────────────────────────────────────────────

@@ -240,6 +240,16 @@ footer .dot {
 
 /* ── Signed-in shell (sidebar + routed view) ───────────────────── */
 
+/* Same `[hidden]`-vs-`display:grid` problem as `.signed-in` and
+   `.nav-link` — `display: grid` overrides the boolean `hidden`
+   attribute that app.js's render() toggles when transitioning
+   between the signed-out landing and the signed-in dashboard
+   shell. Without this reset, the sidebar bleeds through onto
+   the signed-out landing after sign-out. */
+.shell[hidden] {
+  display: none !important;
+}
+
 .shell {
   display: grid;
   grid-template-columns: 220px 1fr;
@@ -260,6 +270,13 @@ footer .dot {
   padding: 8px;
   position: sticky;
   top: 24px;
+}
+
+/* Same `[hidden]`-vs-`display:flex` problem as `.signed-in` —
+   make the attribute take precedence. The "Redeem a gift code"
+   nav link toggles its `hidden` based on the eligibility flag. */
+.nav-link[hidden] {
+  display: none !important;
 }
 
 .nav-link {
@@ -1148,6 +1165,15 @@ dialog.signin-dialog textarea:focus {
 }
 
 /* ── Signed-in chip ─────────────────────────────────────────────── */
+
+/* The `hidden` attribute lives on `#signed-in` while signed-out;
+   `display: inline-flex` would override it. Keep the `[hidden]`
+   reset so the global toggle in app.js's `onSignedOut` actually
+   hides this whole chip (Signed-in-as label + Sign-out button)
+   instead of leaking through. */
+.signed-in[hidden] {
+  display: none !important;
+}
 
 .signed-in {
   display: inline-flex;
