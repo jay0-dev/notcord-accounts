@@ -327,34 +327,58 @@
 
   // Render the "Choose / Upgrade / Current" button for one plan
   // card. `target` is the tile this button lives in (core/pro);
-  // `current` is the user's active plan ("core"|"pro"|null).
+  // `current` is the user's active plan ("core"|"pro"|null);
+  // `giftTrialNoStripe` is true when the user is on a gift-funded
+  // trial without a Stripe subscription yet — in which case we
+  // route the "Upgrade to Pro" button through /billing/checkout
+  // (where Stripe respects the gift's trial_end) instead of
+  // /billing/switch (which needs an existing Stripe sub id).
   //
-  // - No active plan: "Choose X" → /billing/checkout (Stripe).
-  // - Active plan = this tile: "Current plan" disabled.
-  // - Active Core, looking at Pro tile: "Upgrade to Pro" →
+  // States covered:
+  // - No active plan: "Choose X" → /billing/checkout.
+  // - Active plan = this tile, gift-trial: "Add card to keep
+  //   <plan> after <date>" → /billing/checkout (Stripe sets up
+  //   subscription with trial_end aligned).
+  // - Active plan = this tile, real Stripe sub: "Current plan"
+  //   disabled.
+  // - Active Core, Pro tile, gift-trial: "Upgrade to Pro" →
+  //   /billing/checkout (trial_end aligned).
+  // - Active Core, Pro tile, real sub: "Upgrade to Pro" →
   //   /billing/switch (Customer Portal with proration).
-  // - Active Pro, looking at Core tile: NO downgrade button.
-  //   Pro is one-way; the user has to cancel via the Customer
-  //   Portal and resubscribe to Core if they really want to
-  //   step down. Surfacing this as a button would invite users
-  //   to think it's a one-click downgrade — it isn't, Stripe
-  //   would still hold them on Pro until period end.
-  function planButton(target, current) {
+  // - Active Pro, Core tile: no button — Pro is one-way; cancel
+  //   via Billing instead.
+  function planButton(target, current, giftTrialNoStripe) {
     if (!current) {
       return `<button class="primary" type="button" data-checkout="${target}">Choose ${planLabel(target)}</button>`;
     }
     if (current === target) {
+      if (giftTrialNoStripe) {
+        return `<button class="primary" type="button" data-checkout="${target}">Add card to keep ${planLabel(target)}</button>`;
+      }
       return `<button class="primary" type="button" disabled>Current plan</button>`;
     }
     if (current === "core" && target === "pro") {
+      if (giftTrialNoStripe) {
+        return `<button class="primary" type="button" data-checkout="pro">Upgrade to Pro</button>`;
+      }
       return `<button class="primary" type="button" data-switch="pro">Upgrade to Pro</button>`;
     }
     // current === "pro", target === "core" → no button.
     return `<p class="muted" style="margin: 0; font-size: 13px;">Pro members stay on Pro for the year. Cancel from <a href="/billing" data-route>Billing</a> if you want to step down at renewal.</p>`;
   }
 
-  function statusLabel(status) {
+  function statusLabel(status, plan) {
     if (!status || status === "unsubscribed") return "No subscription";
+    // "trialing" is Stripe's term for any pre-paid period — both
+    // gift-code redemptions and Stripe's native free-trial flow
+    // surface as trialing. To users it's confusing to read
+    // "Trialing" when their account is actually fully active for
+    // a year. Show the plan name itself; the renew-line under the
+    // Billing card already conveys "until <date>" so we don't
+    // lose the temporal information.
+    if (status === "trialing") {
+      return plan ? planLabel(plan) : "Active";
+    }
     return status.replace(/_/g, " ");
   }
 
@@ -399,7 +423,7 @@
         <div class="stat">
           <div class="stat-label">Plan</div>
           <div class="stat-value">${planLabel(body.plan)}</div>
-          <div class="stat-sub">Status: ${statusLabel(body.status)}</div>
+          <div class="stat-sub">Status: ${statusLabel(body.status, body.plan)}</div>
         </div>
         <div class="stat">
           <div class="stat-label">Billing</div>
@@ -437,13 +461,22 @@
     // the user from ever paying.
     const entitled = body && (body.status === "active" || body.status === "trialing");
     const current = entitled ? body.plan : null;
+    // Gift-trialing users (redeemed a code, no Stripe subscription
+    // yet) — backend signal is "trialing status but no Stripe
+    // current_period_end". Their plan-switch buttons route to
+    // /billing/checkout, where Stripe.subscription_data.trial_end
+    // = the gift's trial_end so the first paid charge fires the
+    // day the gift would have expired (not today).
+    const giftTrialNoStripe = !!(body && body.status === "trialing" && !body.current_period_end);
 
     setView(html`
       ${raw(
         pageHeader(
           "Subscription",
           current
-            ? `You're on Hexis ${planLabel(current)}. Change plans any time.`
+            ? (giftTrialNoStripe
+                ? `You're on Hexis ${planLabel(current)} via a gift code through ${fmtDate(body.trial_end)}. Add a card to keep your account active after that — Stripe won't charge you until the gift expires.`
+                : `You're on Hexis ${planLabel(current)}. Change plans any time.`)
             : "Pick the plan that fits — upgrade or downgrade any time."
         )
       )}
@@ -459,7 +492,7 @@
             <li>720p screen-share</li>
             <li>3 personal API keys</li>
           </ul>
-          ${raw(planButton("core", current))}
+          ${raw(planButton("core", current, giftTrialNoStripe))}
         </div>
 
         <div class="plan-card plan-card-pro ${current === "pro" ? "plan-card-active" : ""}">
@@ -474,7 +507,7 @@
             <li>25 personal API keys</li>
             <li>Hexis Pro badge</li>
           </ul>
-          ${raw(planButton("pro", current))}
+          ${raw(planButton("pro", current, giftTrialNoStripe))}
         </div>
       </div>
 
@@ -1517,6 +1550,19 @@
     const params = new URLSearchParams(location.search);
     const prefill = params.get("code") || "";
     const signedIn = !!state.user;
+
+    // Active members who already redeemed (or who have a Stripe
+    // subscription) can't apply a code. The sidebar entry hides
+    // for them, but a direct URL hit still landed here — bounce
+    // to the subscription page with a hint instead of showing
+    // an apply form they'd just get a 409 on.
+    if (signedIn) {
+      const summary = state.summary || (await refreshSummary());
+      if (summary && summary.gift_redemption_eligible === false) {
+        navigate("/subscription", { replace: true });
+        return;
+      }
+    }
 
     const heroLede = signedIn
       ? "Apply a gift code to your account — adds a year of Core."
