@@ -10,6 +10,14 @@
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
+  <!-- A-M11 — skip-to-content link for keyboard / screen-reader
+       users. Visually hidden until focused; jumps past the topbar
+       to the in-page anchor below. The anchor wraps both the
+       signed-out landing and the signed-in shell so the link
+       always lands on the first piece of content the user actually
+       came for. -->
+  <a class="skip-link" href="#content">Skip to main content</a>
+
   <header class="topbar">
     <a class="brand" href="/" data-route>
       <svg class="logo" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
@@ -73,6 +81,11 @@
       </p>
     </form>
   </dialog>
+
+  <!-- Skip-link target wraps both the signed-out landing and the
+       signed-in shell so the focus always lands on the first piece
+       of real content. -->
+  <div id="content" tabindex="-1">
 
   <!-- Signed-out landing: hero, feature grid, trust block. -->
   <main class="container landing-container" id="landing" hidden>
@@ -185,6 +198,8 @@
       <!-- populated by app.js -->
     </main>
   </div>
+
+  </div>  <!-- /#content (skip-link target) -->
 
   <footer>
     <span>© 2026 Hexis</span>

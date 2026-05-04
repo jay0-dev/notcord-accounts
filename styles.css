@@ -194,11 +194,23 @@ a:hover {
 }
 
 .hero h1 {
+  /* A-M8 — landing hero owns the largest type on the site so
+     visitors land on the headline before anything else. Bumped
+     40→48 (then trimmed letter-spacing to keep the word density
+     readable at the new size) to widen the gap between hero h1
+     (top of the funnel) and page-header h1 (28 px, mid-flow). */
   margin: 0 0 14px;
-  font-size: 40px;
+  font-size: 48px;
   font-weight: 800;
-  letter-spacing: -0.6px;
-  line-height: 1.15;
+  letter-spacing: -0.8px;
+  line-height: 1.1;
+}
+
+@media (max-width: 540px) {
+  .hero h1 {
+    font-size: 36px;
+    letter-spacing: -0.4px;
+  }
 }
 
 .hero .lede {
@@ -428,6 +440,38 @@ a:hover {
   font-size: 11px;
   text-align: center;
   letter-spacing: 0.2px;
+}
+
+/* A-M11 — skip-to-content link. Visually hidden until focused;
+   then jumps into a yellow pill in the top-left so keyboard users
+   can bypass the topbar nav. Pattern matches the WAI-ARIA bypass-
+   blocks technique. */
+.skip-link {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 1000;
+  padding: 8px 14px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 700;
+  font-size: 13px;
+  text-decoration: none;
+  /* Pull the link off-screen until focused. clip-path keeps it in
+     the layout flow for AT but invisible to sighted users. */
+  transform: translateY(-200%);
+  transition: transform 120ms ease;
+}
+
+.skip-link:focus,
+.skip-link:focus-visible {
+  transform: translateY(0);
+  outline: 2px solid var(--accent-dim);
+}
+
+#content:focus {
+  outline: none;
 }
 
 /* ── A-B2 — themed 404 page ───────────────────────────────────── */
@@ -689,6 +733,13 @@ footer .dot {
   margin-bottom: 32px;
   padding-bottom: 20px;
   border-bottom: 1px solid var(--border);
+}
+
+/* A-M2 — eyebrow pill on form pages. Slightly tighter than the
+   landing-hero's pill (no top margin, smaller bottom margin) so
+   the page-header stack reads at a single glance. */
+.page-header .page-eyebrow {
+  margin-bottom: 12px;
 }
 
 .page-header h1 {

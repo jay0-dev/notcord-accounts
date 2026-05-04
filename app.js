@@ -343,13 +343,28 @@
     view.innerHTML = markup;
   }
 
-  function pageHeader(title, lede) {
+  function pageHeader(title, lede, eyebrow) {
+    // A-M2 — optional eyebrow pill above the h1, mirroring the
+    // landing-hero treatment. Auth/recovery pages use this so the
+    // brand pattern carries across surfaces.
     return html`
       <section class="page-header">
+        ${eyebrow ? raw(`<span class="hero-eyebrow page-eyebrow">${escape(eyebrow)}</span>`) : ""}
         <h1>${title}</h1>
         <p class="lede">${lede}</p>
       </section>
     `;
+  }
+  // tiny inline escape (mirrors html`` 's escape) so pageHeader's
+  // optional `eyebrow` can be passed as a regular string and still
+  // be encoded when injected via `raw`.
+  function escape(v) {
+    return String(v)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   }
 
   function placeholderCard(heading, body) {
@@ -2423,7 +2438,7 @@
       : "We'll email you a verification link, then walk you through setting up two-factor auth.";
 
     setView(html`
-      ${raw(pageHeader("Create your Hexis account", "Pick a username, set a password, and verify your email."))}
+      ${raw(pageHeader("Create your Hexis account", "Pick a username, set a password, and verify your email.", "Sign up"))}
 
       <div class="redeem-card centered-form" id="register-step">
         <label for="reg-username">Username</label>
@@ -2668,7 +2683,7 @@
 
   function renderForgotPassword() {
     setView(html`
-      ${raw(pageHeader("Forgot your password?", "Enter your email and we'll send a reset link."))}
+      ${raw(pageHeader("Forgot your password?", "Enter your email and we'll send a reset link.", "Recover access"))}
 
       <div class="redeem-card centered-form" id="forgot-step">
         <label for="forgot-email">Email</label>
@@ -2744,7 +2759,7 @@
     }
 
     setView(html`
-      ${raw(pageHeader("Choose a new password", "Set the password you'll use to sign in."))}
+      ${raw(pageHeader("Choose a new password", "Set the password you'll use to sign in.", "Reset password"))}
 
       <div class="redeem-card centered-form" id="reset-step">
         <label for="reset-password">New password (8+ characters)</label>
