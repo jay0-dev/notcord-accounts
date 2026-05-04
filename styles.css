@@ -7,6 +7,12 @@
   --panel-3:   #20242f;     /* highest layer — input fields */
   --border:    #262a35;
   --border-strong: #2f3441;
+  /* A-T4 — input borders. Existing --border (#262a35) sat too close
+     to --panel-2 / --panel-3 for the input edges to be visible at
+     rest. New --input-border tone gives every text field a defined
+     boundary without bumping the panel borders that share --border.
+     Mirrors the Hexis app's #34353a fix. */
+  --input-border: #3a4053;
   --text:      #e6e6e6;
   --muted:     #8a93a6;
   --accent:    #f5c116;
@@ -1202,7 +1208,7 @@ footer .dot {
 dialog.signin-dialog textarea {
   width: 100%;
   background: var(--panel-2);
-  border: 1px solid var(--border);
+  border: 1px solid var(--input-border);
   color: var(--text);
   border-radius: 6px;
   padding: 10px 12px;
@@ -1233,7 +1239,7 @@ dialog.signin-dialog textarea:focus {
 
 .redeem-card input {
   background: var(--panel-3);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--input-border);
   color: var(--text);
   border-radius: var(--radius-sm);
   padding: 11px 14px;
@@ -1389,7 +1395,7 @@ dialog.signin-dialog label {
 dialog.signin-dialog input {
   width: 100%;
   background: var(--panel-2);
-  border: 1px solid var(--border);
+  border: 1px solid var(--input-border);
   color: var(--text);
   border-radius: 6px;
   padding: 10px 12px;

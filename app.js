@@ -88,11 +88,24 @@
     if (state.csrfToken && opts.method && opts.method !== "GET") {
       headers.set("x-csrf-token", state.csrfToken);
     }
-    const res = await fetch(API_BASE + path, {
-      credentials: "include",
-      ...opts,
-      headers,
-    });
+    // A-B1 — network / CORS / DNS failures used to throw out of
+    // here, leaving the caller's await rejected and any UI bootstrap
+    // (notably loadCurrentUser → onSignedOut → render) skipped. The
+    // page would stay on its initial hidden-everything state, and
+    // the user would see a literal blank screen with no error
+    // surfaced. Catch the throw, return a synthetic 0-status row so
+    // every caller can branch on `status` cleanly without each one
+    // duplicating its own try/catch.
+    let res;
+    try {
+      res = await fetch(API_BASE + path, {
+        credentials: "include",
+        ...opts,
+        headers,
+      });
+    } catch (e) {
+      return { status: 0, body: null, networkError: String(e) };
+    }
     let body = null;
     try {
       body = await res.json();
@@ -2374,6 +2387,10 @@
           We'll email you a verification link, then walk you through setting up
           two-factor auth.
         </p>
+        <p class="muted register-signin-link">
+          Already have an account?
+          <a href="#" data-landing-signin>Sign in</a>.
+        </p>
         <p class="signin-error" id="register-error" hidden></p>
       </div>
     `);
@@ -2493,7 +2510,7 @@
         <input type="email" id="forgot-email" autocomplete="email" required />
 
         <button class="primary" type="button" id="forgot-submit">Send reset link</button>
-        <p class="muted">If the email is on file, a reset link is on its way.</p>
+        <p class="muted">We'll send a reset link if the address matches an account.</p>
         <p class="signin-error" id="forgot-error" hidden></p>
       </div>
     `);
