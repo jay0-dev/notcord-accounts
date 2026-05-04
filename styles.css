@@ -79,10 +79,16 @@ a:hover {
   text-decoration: none;
 }
 
-.brand .logo {
-  color: var(--accent);
-  font-size: 22px;
-  line-height: 1;
+.brand .logo,
+.brand .brand-mark {
+  /* A-M4 — was a unicode ⬢ glyph with `color: var(--accent)`,
+     which rendered at the host font's idea of how a hexagon
+     should look (different on every OS). The SVG path mirrors
+     favicon.svg so the brand mark is identical across the
+     site, the favicon, and the desktop app's hex marks. */
+  width: 20px;
+  height: 22px;
+  display: inline-block;
 }
 
 .brand-name {
@@ -414,6 +420,15 @@ a:hover {
 
 .password-match.ok  { color: var(--success); }
 .password-match.bad { color: var(--danger); }
+
+/* A-M6 — keyboard hint under each form's primary CTA. Subtle so
+   it doesn't compete with the button itself. */
+.submit-hint {
+  margin: 4px 0 0;
+  font-size: 11px;
+  text-align: center;
+  letter-spacing: 0.2px;
+}
 
 /* ── A-B2 — themed 404 page ───────────────────────────────────── */
 

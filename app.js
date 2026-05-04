@@ -2466,6 +2466,7 @@
         ${raw(ageTosCheckboxHtml("register"))}
 
         <button class="primary" type="button" id="register-submit">Create account</button>
+        <p class="muted submit-hint">Press ↩ to submit</p>
 
         <p class="muted">${verificationCopy}</p>
         <p class="muted register-signin-link">
@@ -2476,6 +2477,25 @@
       </div>
     `);
     wireRegisterPasswordUx();
+    wireEnterSubmit("register-step", doRegisterSubmit);
+  }
+
+  // A-M6 — wire Enter-to-submit on a redeem-card form. The cards
+  // aren't wrapped in <form> so native submit-on-Enter doesn't
+  // fire; this listens to keydown on every input/checkbox in the
+  // card and runs the submit handler when the user hits Enter
+  // (Shift+Enter / Cmd+Enter pass through). Skips textareas.
+  function wireEnterSubmit(rootId, submitFn) {
+    const root = document.getElementById(rootId);
+    if (!root) return;
+    root.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      if (e.shiftKey || e.metaKey || e.altKey) return;
+      const tag = e.target.tagName;
+      if (tag === "TEXTAREA") return;
+      e.preventDefault();
+      submitFn();
+    });
   }
 
   // A-T6 — live password UX. Wires the show/hide toggles, the
@@ -2655,10 +2675,12 @@
         <input type="email" id="forgot-email" autocomplete="email" required />
 
         <button class="primary" type="button" id="forgot-submit">Send reset link</button>
+        <p class="muted submit-hint">Press ↩ to submit</p>
         <p class="muted">We'll send a reset link if the address matches an account.</p>
         <p class="signin-error" id="forgot-error" hidden></p>
       </div>
     `);
+    wireEnterSubmit("forgot-step", doForgotSubmit);
   }
 
   async function doForgotSubmit() {
@@ -2682,9 +2704,28 @@
       root.innerHTML = html`
         <h3>Check your inbox</h3>
         <p>If <strong>${email}</strong> is on file, a reset link is on its way.</p>
-        <p class="muted">The link is valid for 1 hour. Didn't get it? Check spam or
-        <a href="/forgot-password" data-route>try again</a>.</p>
+        <p class="muted">The link is valid for 1 hour. Didn't get it? Check spam,
+          or <a href="#" id="forgot-resend">resend the email</a>.
+          Different address? <a href="/forgot-password" data-route>Start over</a>.</p>
+        <p class="muted forgot-resent" id="forgot-resent" hidden>Resent. Check your inbox again — and your spam folder.</p>
       `;
+      const resendLink = $("forgot-resend");
+      if (resendLink) {
+        resendLink.addEventListener("click", async (e) => {
+          e.preventDefault();
+          if (resendLink.dataset.busy === "1") return;
+          resendLink.dataset.busy = "1";
+          resendLink.textContent = "resending…";
+          await apiFetch("/auth/web/password/forgot", {
+            method: "POST",
+            body: JSON.stringify({ email }),
+          });
+          const resent = $("forgot-resent");
+          if (resent) resent.hidden = false;
+          resendLink.textContent = "resend the email";
+          resendLink.dataset.busy = "0";
+        });
+      }
     }
   }
 
@@ -2719,9 +2760,11 @@
         </div>
 
         <button class="primary" type="button" id="reset-submit" data-token="${token}">Set new password</button>
+        <p class="muted submit-hint">Press ↩ to submit</p>
         <p class="signin-error" id="reset-error" hidden></p>
       </div>
     `);
+    wireEnterSubmit("reset-step", doResetSubmit);
   }
 
   async function doResetSubmit() {
