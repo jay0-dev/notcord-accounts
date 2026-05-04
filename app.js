@@ -229,6 +229,22 @@
     render();
   }
 
+  // A-T9 — paths where the page's own primary CTA is the form
+  // submit (Create account / Send reset link / Reset password).
+  // The header Sign-in button shouldn't compete with those, so we
+  // demote it to a ghost outline on these routes only. Other public
+  // routes (e.g. /redeem, /verify-email/done) keep the filled
+  // primary because there's no other primary on the page.
+  const FORM_ROUTES_DEMOTING_HEADER_SIGNIN =
+    new Set(["/register", "/forgot-password", "/reset-password"]);
+
+  function setHeaderSignInVariant(path) {
+    if (!signInBtn) return;
+    const demote = FORM_ROUTES_DEMOTING_HEADER_SIGNIN.has(path);
+    signInBtn.classList.toggle("primary", !demote);
+    signInBtn.classList.toggle("ghost", demote);
+  }
+
   function render() {
     const path = location.pathname;
     const route = matchRoute(path);
@@ -245,6 +261,7 @@
       const sidebar = document.querySelector("aside.sidebar");
       if (sidebar) sidebar.hidden = !state.user;
       shell.classList.toggle("shell-no-sidebar", !state.user);
+      setHeaderSignInVariant(path);
       markActiveNav(path);
       route.render();
       return;
@@ -261,11 +278,13 @@
     if (!state.user) {
       landing.hidden = false;
       shell.hidden = true;
+      setHeaderSignInVariant(path);
       return;
     }
 
     landing.hidden = true;
     shell.hidden = false;
+    setHeaderSignInVariant(path);
     markActiveNav(path);
 
     if (route) {
@@ -1401,14 +1420,14 @@
 
     const username = ($("pack-username") || {}).value || "";
     const password = ($("pack-password") || {}).value || "";
-    const ageOk = ($("pack-age") || {}).checked;
+    const ageOk = ageTosOk("pack");
 
     if (!username || !password) {
       showPackError("Username + password are required.");
       return;
     }
     if (!ageOk) {
-      showPackError("You must confirm you're 18+ and agree to the terms.");
+      showPackError("Confirm you're 18+ and agree to the terms.");
       return;
     }
 
@@ -1760,17 +1779,31 @@
     root.dataset.code = code;
   }
 
-  // Self-attested age-and-terms checkbox. Each form that needs it
-  // gets its own DOM id (e.g. `redeem-age`, `pack-age`,
-  // `register-age`) so the form-specific submit handler can
-  // grab the right element.
+  // A-T7 — split into two independent checkboxes. Each form that
+  // needs them gets its own DOM ids (e.g. `register-age` +
+  // `register-tos`); the form-specific submit handler uses
+  // `ageTosOk(prefix)` to verify both. Splitting the boxes is
+  // expected by some compliance regimes (EU, UK) and produces a
+  // cleaner audit-trail of consent.
   function ageTosCheckboxHtml(prefix) {
     return `
       <label class="age-tos-row" style="display: flex; gap: 8px; align-items: flex-start; margin-top: 12px; font-size: 13px; cursor: pointer;">
         <input type="checkbox" id="${prefix}-age" required style="margin-top: 3px;" />
-        <span>I am 18 years or older and agree to the
+        <span>I am 18 years or older.</span>
+      </label>
+      <label class="age-tos-row" style="display: flex; gap: 8px; align-items: flex-start; margin-top: 8px; font-size: 13px; cursor: pointer;">
+        <input type="checkbox" id="${prefix}-tos" required style="margin-top: 3px;" />
+        <span>I agree to the
           <a href="https://hexis.chat/terms" target="_blank" rel="noopener">Hexis terms of service</a>.</span>
       </label>`;
+  }
+
+  // True only when both the age checkbox and the ToS checkbox
+  // are ticked. Form-specific submit handlers gate Create on this.
+  function ageTosOk(prefix) {
+    const age = ($(prefix + "-age") || {}).checked;
+    const tos = ($(prefix + "-tos") || {}).checked;
+    return Boolean(age && tos);
   }
 
   async function doRedeemSubmit() {
@@ -1780,14 +1813,14 @@
     const code = root.dataset.code;
     const username = ($("redeem-username") || {}).value || "";
     const password = ($("redeem-password") || {}).value || "";
-    const ageOk = ($("redeem-age") || {}).checked;
+    const ageOk = ageTosOk("redeem");
 
     if (!username || !password) {
       showRedeemError("Username + password are required.");
       return;
     }
     if (!ageOk) {
-      showRedeemError("You must confirm you're 18+ and agree to the terms.");
+      showRedeemError("Confirm you're 18+ and agree to the terms.");
       return;
     }
 
@@ -2406,7 +2439,7 @@
     const email = $("reg-email").value.trim();
     const password = $("reg-password").value;
     const password2 = $("reg-password2").value;
-    const ageOk = ($("register-age") || {}).checked;
+    const ageOk = ageTosOk("register");
 
     function fail(msg) {
       if (errEl) { errEl.textContent = msg; errEl.hidden = false; }
@@ -2415,7 +2448,7 @@
 
     if (password !== password2) return fail("Passwords don't match.");
     if (password.length < 8) return fail("Password must be at least 8 characters.");
-    if (!ageOk) return fail("You must confirm you're 18+ and agree to the terms.");
+    if (!ageOk) return fail("Confirm you're 18+ and agree to the terms.");
 
     let keys;
     try {

@@ -71,7 +71,7 @@
     </form>
   </dialog>
 
-  <!-- Signed-out landing: clean hero, sign-in + create-account CTAs. -->
+  <!-- Signed-out landing: hero, feature grid, trust block. -->
   <main class="container landing-container" id="landing" hidden>
     <section class="hero">
       <span class="hero-eyebrow">Account &amp; billing</span>
@@ -79,6 +79,64 @@
       <p class="lede">
         Subscriptions, billing, API keys, bots, and gift codes — all in
         one place. Sign in with your Hexis account, or create a new one.
+      </p>
+      <div class="hero-actions">
+        <button class="primary lg" type="button" data-landing-signin>Sign in</button>
+        <a class="ghost lg" href="/register" data-route>Create an account</a>
+      </div>
+    </section>
+
+    <!-- Feature grid (A-T1) — what each section of the dashboard
+         actually does. Four cards mirror the signed-in sidebar so
+         visitors know what they're getting before they sign in. -->
+    <section class="feature-grid" aria-labelledby="features-heading">
+      <h2 id="features-heading" class="section-heading">What you can do here</h2>
+
+      <div class="feature-cards">
+        <article class="feature-card">
+          <div class="feature-icon" aria-hidden="true">⬢</div>
+          <h3>Subscription</h3>
+          <p>Pick a plan, upgrade or downgrade anytime, see what's
+          included at each tier. No surprise charges.</p>
+        </article>
+
+        <article class="feature-card">
+          <div class="feature-icon" aria-hidden="true">⬡</div>
+          <h3>Billing</h3>
+          <p>Update your payment method, download invoices, and review
+          past charges. Powered by Stripe — we never see your card
+          number.</p>
+        </article>
+
+        <article class="feature-card">
+          <div class="feature-icon" aria-hidden="true">⬢</div>
+          <h3>API keys &amp; bots</h3>
+          <p>Mint long-lived API keys for scripts and create OAuth
+          applications for Discord-style bots. Scope each one to the
+          permissions it actually needs.</p>
+        </article>
+
+        <article class="feature-card">
+          <div class="feature-icon" aria-hidden="true">⬡</div>
+          <h3>Gift codes</h3>
+          <p>Buy a Hexis subscription for someone else, or redeem a
+          code you were given. Codes are single-use and stack on top
+          of your existing plan.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- Trust block (A-T2) — why an account at all. Anchors the
+         scroll story before the page ends so visitors land on a
+         second CTA. -->
+    <section class="trust-block">
+      <h2 class="section-heading">Why an account?</h2>
+      <p>
+        Your Hexis chat client runs end-to-end encrypted by default —
+        you don't need an account just to chat. The account layer
+        lives here so subscriptions, billing details, and bot
+        credentials stay separate from your message history. One
+        account syncs across every device you sign in on.
       </p>
       <div class="hero-actions">
         <button class="primary lg" type="button" data-landing-signin>Sign in</button>
