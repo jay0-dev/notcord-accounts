@@ -197,29 +197,42 @@
 
   // ── Router ───────────────────────────────────────────────────────
   const routes = [
-    { path: "/",                 render: renderOverview,       auth: true  },
-    { path: "/subscription",     render: renderSubscription,   auth: true  },
-    { path: "/billing",          render: renderBilling,        auth: true  },
-    { path: "/billing/return",   render: renderBillingReturn,  auth: true  },
-    { path: "/api-keys",         render: renderApiKeys,        auth: true  },
-    { path: "/bots",             render: renderBots,           auth: true  },
-    { path: "/gift",             render: renderGift,           auth: false },
-    { path: "/gift/orders",      render: renderGiftOrders,     auth: true  },
-    { path: "/redeem",           render: renderRedeem,         auth: false },
-    { path: "/oauth/authorize",  render: renderOauthAuthorize, auth: false },
-    { path: "/redeem/return",    render: renderRedeemReturn,   auth: false },
+    { path: "/",                 render: renderOverview,       auth: true,  title: "Account"           },
+    { path: "/subscription",     render: renderSubscription,   auth: true,  title: "Subscription"      },
+    { path: "/billing",          render: renderBilling,        auth: true,  title: "Billing"           },
+    { path: "/billing/return",   render: renderBillingReturn,  auth: true,  title: "Billing"           },
+    { path: "/api-keys",         render: renderApiKeys,        auth: true,  title: "API keys"          },
+    { path: "/bots",             render: renderBots,           auth: true,  title: "Bots"              },
+    { path: "/gift",             render: renderGift,           auth: false, title: "Gift Hexis"        },
+    { path: "/gift/orders",      render: renderGiftOrders,     auth: true,  title: "Gift orders"       },
+    { path: "/redeem",           render: renderRedeem,         auth: false, title: "Redeem a gift"     },
+    { path: "/oauth/authorize",  render: renderOauthAuthorize, auth: false, title: "Authorize app"     },
+    { path: "/redeem/return",    render: renderRedeemReturn,   auth: false, title: "Redeem"            },
     // Phase J5 — browser register + onboarding flow.
-    { path: "/register",         render: renderRegister,         auth: false },
-    { path: "/welcome",          render: renderWelcome,          auth: true  },
-    { path: "/verify-email/done",render: renderVerifyEmailDone,  auth: false },
-    { path: "/forgot-password",  render: renderForgotPassword,   auth: false },
-    { path: "/reset-password",   render: renderResetPassword,    auth: false },
-    { path: "/setup-2fa",        render: renderSetupTotp,        auth: true  },
-    { path: "/move-squad",       render: renderMoveSquad,        auth: true  },
+    { path: "/register",         render: renderRegister,         auth: false, title: "Create account"    },
+    { path: "/welcome",          render: renderWelcome,          auth: true,  title: "Welcome"           },
+    { path: "/verify-email/done",render: renderVerifyEmailDone,  auth: false, title: "Email verified"    },
+    { path: "/forgot-password",  render: renderForgotPassword,   auth: false, title: "Forgot password"   },
+    { path: "/reset-password",   render: renderResetPassword,    auth: false, title: "Reset password"    },
+    { path: "/setup-2fa",        render: renderSetupTotp,        auth: true,  title: "Set up 2FA"        },
+    { path: "/move-squad",       render: renderMoveSquad,        auth: true,  title: "Move your squad"   },
   ];
 
   function matchRoute(path) {
     return routes.find((r) => r.path === path) || null;
+  }
+
+  // A-M10 — per-route document title so browser tabs and history
+  // show useful labels instead of every page reading "Hexis Accounts".
+  // Also lifts SEO in the rare case search engines crawl past
+  // /robots.txt's auth-required disallow list (e.g. /gift, /register).
+  function setPageTitle(route, isLanding) {
+    const base = "Hexis Accounts";
+    if (isLanding || !route || !route.title) {
+      document.title = base;
+      return;
+    }
+    document.title = route.title + " · " + base;
   }
 
   function navigate(path, { replace = false } = {}) {
@@ -262,6 +275,7 @@
       if (sidebar) sidebar.hidden = !state.user;
       shell.classList.toggle("shell-no-sidebar", !state.user);
       setHeaderSignInVariant(path);
+      setPageTitle(route, false);
       markActiveNav(path);
       route.render();
       return;
@@ -279,12 +293,14 @@
       landing.hidden = false;
       shell.hidden = true;
       setHeaderSignInVariant(path);
+      setPageTitle(null, true);
       return;
     }
 
     landing.hidden = true;
     shell.hidden = false;
     setHeaderSignInVariant(path);
+    setPageTitle(route, false);
     markActiveNav(path);
 
     if (route) {

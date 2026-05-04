@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Hexis">
+  <!-- Flat-top hexagon, brand accent. Mirrors the rail / settings
+       hex marks so the browser tab carries the same visual identity
+       as the rest of the product. Vertices on a 14-radius circle
+       centred at (16, 16). -->
+  <path
+    fill="#f5c116"
+    d="M30 16 L23 28 L9 28 L2 16 L9 4 L23 4 Z"
+  />
+</svg>
