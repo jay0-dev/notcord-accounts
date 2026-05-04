@@ -608,9 +608,22 @@ footer {
   font-size: 12px;
 }
 
+/* A-M3 — render the separator as a small inline dot pseudo so the
+   typography reads tighter than a · character at the regular text
+   weight / baseline. The original `<span class="dot">·</span>` is
+   retained for HTML simplicity but its character is replaced by
+   the ::before disc and the span itself collapses to zero ink. */
 footer .dot {
-  margin: 0 8px;
-  opacity: 0.5;
+  display: inline-block;
+  margin: 0 10px;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--muted);
+  opacity: 0.55;
+  font-size: 0;        /* hide the literal "·" character */
+  line-height: 0;
+  vertical-align: 3px; /* sit on the x-height baseline */
 }
 
 /* ── Signed-in shell (sidebar + routed view) ───────────────────── */
