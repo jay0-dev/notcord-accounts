@@ -2395,10 +2395,21 @@
   // ── Phase J5 — browser register + onboarding ───────────────────
 
   function renderRegister() {
+    // M11 — when arriving from the desktop app's "Create account in
+    // your browser" link, swap the post-form copy to acknowledge the
+    // round-trip. The desktop client passes `?from=desktop`; the
+    // /welcome page hands users a `hexis://login?email=…` deep link
+    // when they finish, so we promise the round-trip in advance.
+    const fromDesktop =
+      new URLSearchParams(location.search).get("from") === "desktop";
+    const verificationCopy = fromDesktop
+      ? "We'll email you a verification link, then walk you through 2FA. When you're done, we'll bounce you back to the Hexis desktop app to sign in."
+      : "We'll email you a verification link, then walk you through setting up two-factor auth.";
+
     setView(html`
       ${raw(pageHeader("Create your Hexis account", "Pick a username, set a password, and verify your email."))}
 
-      <div class="redeem-card" id="register-step">
+      <div class="redeem-card centered-form" id="register-step">
         <label for="reg-username">Username</label>
         <input type="text" id="reg-username" autocapitalize="none" autocorrect="off"
                spellcheck="false" pattern="[a-zA-Z0-9_.\\-]{2,32}" required />
@@ -2406,20 +2417,41 @@
         <label for="reg-email">Email</label>
         <input type="email" id="reg-email" autocomplete="email" required />
 
-        <label for="reg-password">Password (8+ characters)</label>
-        <input type="password" id="reg-password" minlength="8" autocomplete="new-password" required />
+        <label for="reg-password">Password</label>
+        <div class="password-field">
+          <input type="password" id="reg-password" minlength="8"
+                 autocomplete="new-password" required />
+          <button type="button" class="password-toggle" data-toggle-pw="reg-password"
+                  aria-label="Show password">Show</button>
+        </div>
+        <!-- A-T6 — strength meter + checklist. Updated live by
+             wireRegisterPasswordUx() as the user types. -->
+        <div class="password-strength" id="reg-password-strength" aria-live="polite">
+          <div class="strength-bar">
+            <span class="strength-fill" data-level="0"></span>
+          </div>
+          <ul class="strength-checks">
+            <li data-check="length">8+ characters</li>
+            <li data-check="lowercase">Lowercase letter</li>
+            <li data-check="uppercase">Uppercase letter</li>
+            <li data-check="digit">A number</li>
+          </ul>
+        </div>
 
         <label for="reg-password2">Confirm password</label>
-        <input type="password" id="reg-password2" minlength="8" autocomplete="new-password" required />
+        <div class="password-field">
+          <input type="password" id="reg-password2" minlength="8"
+                 autocomplete="new-password" required />
+          <button type="button" class="password-toggle" data-toggle-pw="reg-password2"
+                  aria-label="Show password">Show</button>
+        </div>
+        <p class="password-match" id="reg-password-match" aria-live="polite"></p>
 
         ${raw(ageTosCheckboxHtml("register"))}
 
         <button class="primary" type="button" id="register-submit">Create account</button>
 
-        <p class="muted">
-          We'll email you a verification link, then walk you through setting up
-          two-factor auth.
-        </p>
+        <p class="muted">${verificationCopy}</p>
         <p class="muted register-signin-link">
           Already have an account?
           <a href="#" data-landing-signin>Sign in</a>.
@@ -2427,6 +2459,70 @@
         <p class="signin-error" id="register-error" hidden></p>
       </div>
     `);
+    wireRegisterPasswordUx();
+  }
+
+  // A-T6 — live password UX. Wires the show/hide toggles, the
+  // strength bar (4 quick checks: length, lowercase, uppercase,
+  // digit — each lights a checklist item green and bumps the bar
+  // by 25%), and the confirm-password match indicator. Re-run on
+  // every renderRegister() because setView() rewrites the DOM.
+  function wireRegisterPasswordUx() {
+    document.querySelectorAll("[data-toggle-pw]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.getAttribute("data-toggle-pw");
+        const input = document.getElementById(id);
+        if (!input) return;
+        const showing = input.type === "text";
+        input.type = showing ? "password" : "text";
+        btn.textContent = showing ? "Show" : "Hide";
+        btn.setAttribute("aria-label", showing ? "Show password" : "Hide password");
+      });
+    });
+
+    const pw  = document.getElementById("reg-password");
+    const pw2 = document.getElementById("reg-password2");
+    const strengthRoot = document.getElementById("reg-password-strength");
+    const matchEl = document.getElementById("reg-password-match");
+    if (!pw || !pw2 || !strengthRoot || !matchEl) return;
+
+    const fill = strengthRoot.querySelector(".strength-fill");
+    const checkEls = {
+      length:    strengthRoot.querySelector('[data-check="length"]'),
+      lowercase: strengthRoot.querySelector('[data-check="lowercase"]'),
+      uppercase: strengthRoot.querySelector('[data-check="uppercase"]'),
+      digit:     strengthRoot.querySelector('[data-check="digit"]'),
+    };
+
+    function updateStrength() {
+      const v = pw.value;
+      const checks = {
+        length:    v.length >= 8,
+        lowercase: /[a-z]/.test(v),
+        uppercase: /[A-Z]/.test(v),
+        digit:     /\d/.test(v),
+      };
+      let score = 0;
+      Object.entries(checks).forEach(([k, ok]) => {
+        if (checkEls[k]) checkEls[k].classList.toggle("ok", ok);
+        if (ok) score += 1;
+      });
+      if (fill) fill.setAttribute("data-level", String(score));
+    }
+    function updateMatch() {
+      if (!pw2.value) {
+        matchEl.textContent = "";
+        matchEl.className = "password-match";
+        return;
+      }
+      const ok = pw2.value === pw.value;
+      matchEl.textContent = ok ? "Passwords match" : "Passwords don't match yet";
+      matchEl.className = "password-match " + (ok ? "ok" : "bad");
+    }
+    pw.addEventListener("input", () => { updateStrength(); updateMatch(); });
+    pw2.addEventListener("input", updateMatch);
+    updateStrength();
+    updateMatch();
   }
 
   async function doRegisterSubmit() {
@@ -2538,7 +2634,7 @@
     setView(html`
       ${raw(pageHeader("Forgot your password?", "Enter your email and we'll send a reset link."))}
 
-      <div class="redeem-card" id="forgot-step">
+      <div class="redeem-card centered-form" id="forgot-step">
         <label for="forgot-email">Email</label>
         <input type="email" id="forgot-email" autocomplete="email" required />
 
@@ -2593,7 +2689,7 @@
     setView(html`
       ${raw(pageHeader("Choose a new password", "Set the password you'll use to sign in."))}
 
-      <div class="redeem-card" id="reset-step">
+      <div class="redeem-card centered-form" id="reset-step">
         <label for="reset-password">New password (8+ characters)</label>
         <input type="password" id="reset-password" minlength="8" autocomplete="new-password" required />
 
